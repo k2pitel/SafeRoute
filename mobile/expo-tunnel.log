@@ -1,0 +1,5 @@
+Starting project at C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile
+env: load .env
+env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
+Starting Metro Bundler
+CommandError: ngrok tunnel took too long to connect.

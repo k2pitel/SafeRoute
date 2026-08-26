@@ -1,6 +1,6 @@
 // Thin API client for the SafeRoute backend.
 // Base URL is read from app config / env — see mobile/.env.example.
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, {

@@ -1,0 +1,8 @@
+Starting project at C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile
+env: load .env
+env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web Bundling failed 4105ms C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile\node_modules\expo\AppEntry.js (773 modules)
+Unable to resolve "../Utilities/Platform" from "node_modules\react-native\Libraries\ReactPrivate\ReactNativePrivateInterface.js"

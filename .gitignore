@@ -16,6 +16,7 @@ node_modules/
 dist/
 web-build/
 npm-debug.log*
+mobile/saferoute-qr.png
 
 # OS
 .DS_Store
