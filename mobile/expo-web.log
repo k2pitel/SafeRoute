@@ -1,0 +1,10 @@
+Starting project at C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile
+Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web Bundling failed 13521ms C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile\node_modules\expo\AppEntry.js (1 module)
+Unable to resolve "../Utilities/Platform" from "node_modules\react-native\Libraries\ReactPrivate\ReactNativePrivateInterface.js"
+Web Bundling failed 25374ms C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile\node_modules\expo\AppEntry.js (773 modules)
+Unable to resolve "../Utilities/Platform" from "node_modules\react-native\Libraries\ReactPrivate\ReactNativePrivateInterface.js"
