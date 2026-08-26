@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+model.joblib
+
+# Env
+.env
+*.env.local
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Docker
+infra/osrm-data/
+
+# IDE
+.vscode/
+.idea/
