@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, View, Text, FlatList, TouchableOpacity } from "react-native";
 
 import { api } from "../services/api";
+import { useActiveRoute } from "../context/ActiveRouteContext";
 
 // Web build of the Map page. `react-native-maps` has no web target, so on
 // web (Metro picks this file over MapScreen.js automatically) we fall back
@@ -9,6 +10,7 @@ import { api } from "../services/api";
 export default function MapScreen() {
   const [incidents, setIncidents] = useState([]);
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const { activeRoute } = useActiveRoute();
 
   useEffect(() => {
     const bbox = [10.15, 56.13, 10.26, 56.19].join(",");
@@ -24,6 +26,18 @@ export default function MapScreen() {
           real map. Showing nearby incidents as a list below.
         </Text>
       </View>
+
+      {activeRoute && (
+        <View style={styles.routeBanner}>
+          <Text style={styles.routeBannerText}>
+            {activeRoute.origin?.label || "Origin"} → {activeRoute.destination?.label || "Destination"}
+          </Text>
+          <Text style={styles.routeBannerText}>
+            {Math.round(activeRoute.option.duration_minutes)} min · Safety: {activeRoute.option.safety_label} (
+            {activeRoute.option.safety_score.toFixed(1)}/10)
+          </Text>
+        </View>
+      )}
 
       <FlatList
         data={incidents}
@@ -55,6 +69,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   banner: { backgroundColor: "#FFF3CD", padding: 12 },
   bannerText: { color: "#664D03", fontSize: 13 },
+  routeBanner: { backgroundColor: "#EAF2FF", padding: 12 },
+  routeBannerText: { color: "#0A3D91", fontSize: 13, textAlign: "center" },
   empty: { padding: 16, color: "#666" },
   row: { padding: 16, borderBottomWidth: 1, borderBottomColor: "#eee" },
   rowTitle: { fontWeight: "bold", textTransform: "capitalize" },

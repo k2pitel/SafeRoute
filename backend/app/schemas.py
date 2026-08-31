@@ -49,6 +49,15 @@ class ReportOut(BaseModel):
         from_attributes = True
 
 
+class ZoneOut(BaseModel):
+    """A clustered danger/uncertain area — README > Home/Map Page 'Bad Zone'."""
+
+    id: str
+    safety_score: float = Field(..., ge=1, le=10)
+    safety_label: str  # 'unsafe' | 'mixed' | 'safe'
+    geometry: dict  # GeoJSON Polygon
+
+
 class SegmentExplanation(BaseModel):
     segment_id: str
     safety_score: float
@@ -71,3 +80,5 @@ class NewsItem(BaseModel):
     source: str
     published_at: datetime
     summary: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None

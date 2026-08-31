@@ -1,58 +1,70 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View, Text, FlatList, ActivityIndicator, Linking, TouchableOpacity } from "react-native";
+import { StyleSheet, View, Text, TextInput, FlatList, ActivityIndicator, Linking, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "../services/api";
 
 // README > Mobile App — Pages > 3. Latest News Page
-// City-scoped, crime-related news only.
+// Crime-related news, nationwide by default, optionally filtered to a city.
 export default function NewsScreen() {
-  const [city, setCity] = useState("Aarhus, Denmark"); // TODO: derive from user location/settings
+  const [city, setCity] = useState(""); // empty = all of Denmark
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = (cityFilter) => {
+    setLoading(true);
     api
-      .getNews(city)
+      .getNews(cityFilter || undefined)
       .then(setNews)
       .catch(() => setNews([]))
       .finally(() => setLoading(false));
-  }, [city]);
+  };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  useEffect(() => load(city), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Crime news — {city}</Text>
-      <FlatList
-        data={news}
-        keyExtractor={(item) => item.url}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => Linking.openURL(item.url)}>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.meta}>
-              {item.source} · {new Date(item.published_at).toLocaleDateString()}
-            </Text>
-            {item.summary ? <Text style={styles.summary}>{item.summary}</Text> : null}
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={<Text style={styles.empty}>No recent crime news for this city.</Text>}
+      <Text style={styles.header}>Crime news — {city || "Denmark"}</Text>
+      <TextInput
+        style={styles.input}
+        value={city}
+        onChangeText={setCity}
+        onSubmitEditing={() => load(city)}
+        placeholder="Filter by city (optional)"
       />
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 20 }} />
+      ) : (
+        <FlatList
+          data={news}
+          keyExtractor={(item) => item.url}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.card} onPress={() => Linking.openURL(item.url)}>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{item.title}</Text>
+                {item.latitude != null && <Ionicons name="location" size={14} color="#E5484D" />}
+              </View>
+              <Text style={styles.meta}>
+                {item.source} · {new Date(item.published_at).toLocaleDateString()}
+              </Text>
+              {item.summary ? <Text style={styles.summary}>{item.summary}</Text> : null}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={<Text style={styles.empty}>No recent crime news{city ? ` for ${city}` : ""}.</Text>}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
+  header: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, marginBottom: 12 },
   card: { borderBottomWidth: 1, borderColor: "#eee", paddingVertical: 12 },
-  title: { fontSize: 15, fontWeight: "600" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  title: { fontSize: 15, fontWeight: "600", flexShrink: 1 },
   meta: { color: "#888", fontSize: 12, marginTop: 2 },
   summary: { color: "#444", marginTop: 6 },
   empty: { textAlign: "center", color: "#999", marginTop: 40 },
