@@ -22,7 +22,13 @@ export const api = {
     request("/api/reports", { method: "POST", body: JSON.stringify(report) }),
   confirmReport: (id) => request(`/api/reports/${id}/confirm`, { method: "POST" }),
   getCrimeIndex: (city) => request(`/api/crime-index?city=${encodeURIComponent(city)}`),
-  getNews: (city) => request(`/api/news${city ? `?city=${encodeURIComponent(city)}` : ""}`),
+  getNews: (city, year) => {
+    const params = new URLSearchParams();
+    if (city) params.set("city", city);
+    if (year) params.set("year", String(year));
+    const qs = params.toString();
+    return request(`/api/news${qs ? `?${qs}` : ""}`);
+  },
   explainSegment: (segmentId) => request(`/api/segments/${segmentId}/explain`),
 };
 

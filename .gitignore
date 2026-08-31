@@ -5,6 +5,7 @@ __pycache__/
 venv/
 *.egg-info/
 model.joblib
+news_archive.db
 
 # Env
 .env

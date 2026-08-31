@@ -1,13 +1,14 @@
 """GET /api/news — latest crime-related news for Denmark (optionally city-filtered)."""
 import asyncio
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 
+from app import news_archive
 from app.schemas import NewsItem
 
 router = APIRouter(prefix="/api/news", tags=["news"])
@@ -189,43 +190,14 @@ async def _fetch_feed(client: httpx.AsyncClient, source: str, url: str) -> list[
     return items
 
 
-def _fallback_news(city: str) -> list[NewsItem]:
-    now = datetime.now(timezone.utc)
-    return [
-        NewsItem(
-            title=f"Police increase patrols in central {city} after recent incidents",
-            url="https://example.com/news/1",
-            source="Local News Example",
-            published_at=now - timedelta(hours=6),
-            summary="Local authorities respond to a rise in reported incidents downtown.",
-        ),
-        NewsItem(
-            title=f"{city} council to review street lighting in high-report areas",
-            url="https://example.com/news/2",
-            source="Local News Example",
-            published_at=now - timedelta(days=1),
-            summary="Proposal follows community feedback collected via safety apps.",
-        ),
-    ]
-
-
-@router.get("", response_model=list[NewsItem])
-async def get_news(city: str = Query(None, description="Optional city filter; omit for all of Denmark")):
-    """
-    Pools several Danish outlets' public RSS feeds, keeps only items that
-    look crime-related (keyword/category match — README > Data Sources
-    calls for a real NLP classifier here in production), and attaches an
-    approximate lat/lon when the headline names a known Danish city.
-
-    NOTE: RSS only ever exposes each outlet's latest items (roughly the
-    last day or two) — there's no historical range here. A real archive
-    (back to 2020, say) needs a proper news-search API/subscription, not a
-    live feed; see the "News history" discussion in README > Data Sources.
-    """
-    city_filter = None
+def _normalize_city(city: str | None) -> str | None:
     if city and city.strip().lower() not in ("", "denmark", "danmark", "all"):
-        city_filter = city.strip().lower().split(",")[0].strip()
+        return city.strip().lower().split(",")[0].strip()
+    return None
 
+
+async def pool_live_feeds() -> list[NewsItem]:
+    """Fetches + filters every configured feed right now. No archive, no dedup-by-title."""
     async with httpx.AsyncClient(timeout=10) as client:
         results = await asyncio.gather(
             *(_fetch_feed(client, source, url) for source, url in FEEDS),
@@ -233,23 +205,83 @@ async def get_news(city: str = Query(None, description="Optional city filter; om
         )
 
     items: list[NewsItem] = []
-    seen: set[str] = set()
+    seen_urls: set[str] = set()
     for result in results:
         if isinstance(result, Exception):
             continue
         for item in result:
-            dedupe_key = item.url if item.url else item.title.lower()
-            title_key = item.title.strip().lower()
-            if dedupe_key in seen or title_key in seen:
+            if item.url in seen_urls:
                 continue
-            if city_filter and city_filter not in item.title.lower():
-                continue
-            seen.add(dedupe_key)
-            seen.add(title_key)
+            seen_urls.add(item.url)
             items.append(item)
+    return items
 
-    if not items:
-        return _fallback_news(city or "Denmark")
+
+async def poll_and_archive_once() -> int:
+    """Called by the background poller in main.py's lifespan. Returns new-item count."""
+    items = await pool_live_feeds()
+    return news_archive.save_items(items)
+
+
+@router.get("", response_model=list[NewsItem])
+async def get_news(
+    city: str = Query(None, description="Optional city filter; omit for all of Denmark"),
+    year: int = Query(None, description="Optional year filter (e.g. 2020) — pulls from the archive only, not live feeds"),
+):
+    """
+    Default (no `year`): merges the local archive with a fresh live fetch,
+    so results are "whatever's live right now" plus recently-archived
+    items — this is what the News tab uses day-to-day.
+
+    With `year`: returns archived items from just that year, skipping the
+    live fetch entirely (a live feed has nothing to say about 2020). The
+    archive itself is seeded two ways — see main.py's lifespan for the
+    ongoing poller, and app/news_backfill.py (POST /api/news/backfill) for
+    the one-time historical import from the Wayback Machine, which is
+    what actually put pre-2026 items in here in the first place.
+    """
+    city_filter = _normalize_city(city)
+
+    if year is not None:
+        items = news_archive.load_items(city_filter=city_filter, year=year, limit=500)
+        items.sort(key=lambda i: i.published_at, reverse=True)
+        return items
+
+    live_items = await pool_live_feeds()
+    archived_items = news_archive.load_items(city_filter=None)  # filter after merge, below
+
+    items: list[NewsItem] = []
+    seen: set[str] = set()
+    for item in [*live_items, *archived_items]:
+        dedupe_key = item.url if item.url else item.title.lower()
+        title_key = item.title.strip().lower()
+        if dedupe_key in seen or title_key in seen:
+            continue
+        if city_filter and city_filter not in item.title.lower():
+            continue
+        seen.add(dedupe_key)
+        seen.add(title_key)
+        items.append(item)
 
     items.sort(key=lambda i: i.published_at, reverse=True)
-    return items[:50]
+    return items[:200]
+
+
+@router.get("/archive-status")
+def archive_status():
+    """How many crime items the background poller has archived so far."""
+    return {"archived_count": news_archive.count()}
+
+
+@router.post("/backfill")
+async def trigger_backfill(background_tasks: BackgroundTasks):
+    """
+    Kicks off a one-time historical backfill from the Wayback Machine (see
+    app/news_backfill.py) — runs in the background since it makes several
+    sequential requests to a free public archive and can take a minute or
+    so. Poll /api/news/archive-status to watch the count grow.
+    """
+    from app import news_backfill  # local import: avoids a circular import with news.py at module load
+
+    background_tasks.add_task(news_backfill.run_backfill)
+    return {"status": "started", "note": "poll GET /api/news/archive-status for progress"}

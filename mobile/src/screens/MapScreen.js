@@ -133,7 +133,7 @@ export default function MapScreen() {
           <Marker
             key={`news-${item.url}`}
             coordinate={{ latitude: item.latitude, longitude: item.longitude }}
-            pinColor="orange"
+            pinColor="blue"
             onPress={() => {
               setSelectedIncident(null);
               setSelectedNews(item);
@@ -170,7 +170,7 @@ export default function MapScreen() {
           )}
           {newsPins.length > 0 && (
             <View style={styles.legendRow}>
-              <View style={[styles.legendDot, { backgroundColor: "orange" }]} />
+              <View style={[styles.legendDot, { backgroundColor: "blue" }]} />
               <Text style={styles.legendText}>Crime news</Text>
             </View>
           )}
