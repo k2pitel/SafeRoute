@@ -1,9 +1,0 @@
-  --non-interactive is not supported, use $CI=1 instead
-Starting project at C:\Users\sandr\OneDrive\Skrivebord\saferoute\SafeRoute\mobile
-env: load .env
-env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
-› Port 8081 is being used by another process
-Input is required, but 'npx expo' is in non-interactive mode.
-Required input:
-> Use port 8082 instead?
-› Skipping dev server
