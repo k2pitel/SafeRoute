@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import crime_stats, news_archive
 from app.routers import crime_index, incidents, news, reports, routes, segments, zones
+from app.services import crime_stats, news_archive
 
 logger = logging.getLogger("saferoute.news_poller")
 

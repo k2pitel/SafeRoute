@@ -20,9 +20,10 @@ from datetime import datetime, timezone
 
 import httpx
 
-from app import news_archive
-from app.routers.news import _find_location, _is_crime_related
+from app.danish_places import find_location as _find_location
+from app.routers.news import _is_crime_related
 from app.schemas import NewsItem
+from app.services import news_archive
 
 logger = logging.getLogger("saferoute.news_backfill")
 

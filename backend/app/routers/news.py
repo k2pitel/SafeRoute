@@ -1,5 +1,6 @@
 """GET /api/news — latest crime-related news for Denmark (optionally city-filtered)."""
 import asyncio
+import html as html_module
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -8,10 +9,48 @@ from xml.etree import ElementTree
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Query
 
-from app import news_archive
+from app.danish_places import find_location as _find_location
 from app.schemas import NewsItem
+from app.services import news_archive
 
 router = APIRouter(prefix="/api/news", tags=["news"])
+
+# Strips a fetched article page down to plain text so _find_location has more
+# than just the headline to search — a location the headline doesn't name
+# (e.g. "Mand anholdt efter overfald") is very often in the article body.
+#
+# Only <p> tag content is used, not the whole page: nav menus, cookie
+# banners, footers, and "related articles" widgets are real text too, and
+# they reliably mention *some* Danish city (a footer copyright line, another
+# story's teaser, etc.) — searching the whole page produces confident-looking
+# but wrong matches from that surrounding chrome rather than the story
+# itself. Real prose is reliably wrapped in <p> in practice; nav/menu items
+# are not, so this is a cheap, dependency-free way to isolate the story body.
+_SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+_P_TAG_RE = re.compile(r"<p[^>]*>(.*?)</p>", re.DOTALL | re.IGNORECASE)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+async def _fetch_article_text(client: httpx.AsyncClient, url: str) -> str:
+    """Best-effort plain-text of an article's <p> paragraphs. Empty string on
+    any failure (dead link, paywall block, timeout, non-HTML, no <p> tags
+    found) — callers already have the title as a fallback, this is purely
+    additive."""
+    try:
+        resp = await client.get(
+            url,
+            timeout=10,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; SafeRouteNewsBot/1.0)"},
+        )
+        resp.raise_for_status()
+        raw = resp.text
+    except (httpx.HTTPError, UnicodeDecodeError):
+        return ""
+    cleaned = _SCRIPT_STYLE_RE.sub(" ", raw)
+    paragraphs = _P_TAG_RE.findall(cleaned)
+    text = " ".join(_TAG_RE.sub(" ", p) for p in paragraphs)
+    return html_module.unescape(text)
 
 # Danish outlets with free, no-key RSS feeds. Pooling several gives a wider
 # current-news snapshot — RSS is inherently "latest ~N items", not a
@@ -48,103 +87,6 @@ CRIME_KEYWORDS = [
 # itself doesn't contain one of the keywords above (e.g. Ekstra Bladet
 # tags its crime desk articles "Krimi").
 CRIME_CATEGORIES = {"krimi", "retssager", "retssag"}
-
-# Approximate city/town centers, used to pin a headline on the map when it
-# names one — the feeds themselves carry no geodata, so this is always a
-# "which town" approximation, never the actual crime scene. Covers the
-# ~70 largest Danish towns; still not exhaustive of every municipality.
-DANISH_PLACES = {
-    "københavn": (55.6761, 12.5683),
-    "copenhagen": (55.6761, 12.5683),
-    "frederiksberg": (55.6786, 12.5306),
-    "aarhus": (56.1629, 10.2039),
-    "århus": (56.1629, 10.2039),
-    "odense": (55.4038, 10.4024),
-    "aalborg": (57.0488, 9.9217),
-    "esbjerg": (55.4765, 8.4594),
-    "randers": (56.4607, 10.0369),
-    "kolding": (55.4904, 9.4721),
-    "horsens": (55.8607, 9.8503),
-    "vejle": (55.7091, 9.5357),
-    "roskilde": (55.6415, 12.0803),
-    "herning": (56.1362, 8.9761),
-    "silkeborg": (56.1697, 9.5459),
-    "næstved": (55.2299, 11.7607),
-    "fredericia": (55.5654, 9.7526),
-    "viborg": (56.4530, 9.4020),
-    "køge": (55.4578, 12.1817),
-    "holstebro": (56.3606, 8.6153),
-    "taastrup": (55.6500, 12.3000),
-    "slagelse": (55.4055, 11.3547),
-    "hillerød": (55.9268, 12.3072),
-    "sønderborg": (54.9092, 9.7906),
-    "svendborg": (55.0577, 10.6106),
-    "hjørring": (57.4649, 9.9799),
-    "holbæk": (55.7178, 11.7095),
-    "frederikshavn": (57.4407, 10.5372),
-    "nørresundby": (57.0693, 9.9217),
-    "ringsted": (55.4419, 11.7909),
-    "skive": (56.5661, 9.0287),
-    "haderslev": (55.2500, 9.4900),
-    "nykøbing falster": (54.9667, 11.8750),
-    "nykøbing mors": (56.7929, 8.8517),
-    "helsingør": (56.0361, 12.6136),
-    "aabenraa": (55.0442, 9.4197),
-    "ballerup": (55.7308, 12.3608),
-    "ishøj": (55.6167, 12.3500),
-    "brøndby": (55.6500, 12.4167),
-    "glostrup": (55.6667, 12.4000),
-    "gladsaxe": (55.7333, 12.4667),
-    "lyngby": (55.7700, 12.5000),
-    "hvidovre": (55.6500, 12.4833),
-    "rødovre": (55.6833, 12.4500),
-    "greve": (55.5833, 12.3000),
-    "solrød": (55.5333, 12.1833),
-    "vallensbæk": (55.6167, 12.3667),
-    "albertslund": (55.6600, 12.3600),
-    "farum": (55.8100, 12.3600),
-    "værløse": (55.7833, 12.3500),
-    "birkerød": (55.8400, 12.4300),
-    "hørsholm": (55.8833, 12.4833),
-    "rungsted": (55.9000, 12.5500),
-    "kalundborg": (55.6797, 11.0894),
-    "korsør": (55.3300, 11.1400),
-    "nykøbing sjælland": (55.9167, 11.6667),
-    "nakskov": (54.8300, 11.1400),
-    "maribo": (54.7719, 11.5083),
-    "faaborg": (55.1017, 10.2417),
-    "middelfart": (55.5061, 9.7367),
-    "assens": (55.2700, 9.9000),
-    "nyborg": (55.3128, 10.7889),
-    "ringe": (55.2333, 10.4833),
-    "grenaa": (56.4133, 10.8794),
-    "ebeltoft": (56.1958, 10.6817),
-    "hobro": (56.6389, 9.7972),
-    "skagen": (57.7208, 10.5836),
-    "brønderslev": (57.2667, 9.9500),
-    "thisted": (56.9553, 8.6939),
-    "struer": (56.4894, 8.6011),
-    "lemvig": (56.5461, 8.3050),
-    "ikast": (56.1394, 9.1553),
-    "brande": (55.9333, 9.1333),
-    "tønder": (54.9358, 8.8619),
-    "ribe": (55.3306, 8.7647),
-    "varde": (55.6211, 8.4814),
-    "rønne": (55.1000, 14.7000),
-}
-
-# word-boundary regex per place name (compiled once), so e.g. "ry" doesn't
-# match inside an unrelated word.
-_PLACE_PATTERNS = [(name, coords, re.compile(rf"\b{re.escape(name)}\b")) for name, coords in DANISH_PLACES.items()]
-
-
-def _find_location(*texts: str) -> tuple[float | None, float | None]:
-    combined = " ".join(t for t in texts if t).lower()
-    for _name, coords, pattern in _PLACE_PATTERNS:
-        if pattern.search(combined):
-            return coords
-    return None, None
-
 
 def _is_crime_related(title: str, categories: list[str]) -> bool:
     lowered = title.lower()
@@ -217,9 +159,28 @@ async def pool_live_feeds() -> list[NewsItem]:
     return items
 
 
+async def _enrich_unlocated(items: list[NewsItem]) -> None:
+    """For items the title/description couldn't place, fetch the actual
+    article page and try again — mutates items in place. Only called from
+    the archiving path (a handful of new items per poll), never from the
+    interactive live-fetch path, so it doesn't slow down the app."""
+    unlocated = [item for item in items if item.latitude is None]
+    if not unlocated:
+        return
+    async with httpx.AsyncClient() as client:
+        texts = await asyncio.gather(*(_fetch_article_text(client, item.url) for item in unlocated))
+    for item, text in zip(unlocated, texts):
+        if not text:
+            continue
+        lat, lon = _find_location(item.title, text)
+        if lat is not None:
+            item.latitude, item.longitude = lat, lon
+
+
 async def poll_and_archive_once() -> int:
     """Called by the background poller in main.py's lifespan. Returns new-item count."""
     items = await pool_live_feeds()
+    await _enrich_unlocated(items)
     return news_archive.save_items(items)
 
 
@@ -281,7 +242,7 @@ async def trigger_backfill(background_tasks: BackgroundTasks):
     sequential requests to a free public archive and can take a minute or
     so. Poll /api/news/archive-status to watch the count grow.
     """
-    from app import news_backfill  # local import: avoids a circular import with news.py at module load
+    from app.services import news_backfill  # local import: avoids a circular import with news.py at module load
 
     background_tasks.add_task(news_backfill.run_backfill)
     return {"status": "started", "note": "poll GET /api/news/archive-status for progress"}

@@ -1,6 +1,4 @@
 """GET /api/incidents — fetch incidents within a map bounding box."""
-from datetime import datetime, timedelta, timezone
-
 from fastapi import APIRouter, Query
 
 from app.schemas import IncidentOut
@@ -16,39 +14,14 @@ def list_incidents(
     """
     Returns incidents inside the given bounding box.
 
-    NOTE: this is a stub that returns mock data so the endpoint is runnable
-    end-to-end. Swap the body for a PostGIS ST_Within query against the
-    `incidents` table once the DB is seeded, e.g.:
+    No real incident source is wired up yet (see README > Data Sources —
+    municipal crime portals need a per-city ingestion adapter that doesn't
+    exist yet), so this returns nothing rather than placeholder data. Swap
+    the body for a PostGIS ST_Within query against the `incidents` table
+    once that's built, e.g.:
 
         SELECT * FROM incidents
         WHERE ST_Within(location::geometry, ST_MakeEnvelope(:minLon, :minLat, :maxLon, :maxLat, 4326))
         ORDER BY occurred_at DESC LIMIT :limit
     """
-    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox.split(","))
-    mid_lon = (min_lon + max_lon) / 2
-    mid_lat = (min_lat + max_lat) / 2
-
-    now = datetime.now(timezone.utc)
-    mock = [
-        IncidentOut(
-            id=1,
-            type="theft",
-            description="Reported bag snatching",
-            latitude=mid_lat + 0.001,
-            longitude=mid_lon + 0.001,
-            occurred_at=now - timedelta(days=2),
-            source="official",
-            verified=True,
-        ),
-        IncidentOut(
-            id=2,
-            type="assault",
-            description="Altercation reported near transit stop",
-            latitude=mid_lat - 0.001,
-            longitude=mid_lon - 0.002,
-            occurred_at=now - timedelta(hours=10),
-            source="community",
-            verified=False,
-        ),
-    ]
-    return mock[:limit]
+    return []

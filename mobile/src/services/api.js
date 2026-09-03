@@ -29,6 +29,33 @@ export const api = {
     const qs = params.toString();
     return request(`/api/news${qs ? `?${qs}` : ""}`);
   },
+  // Latest-only (no `year`) merges live feeds with just the most-recently
+  // archived items, so with years of archive built up it's almost entirely
+  // this year's news — see backend/app/routers/news.py's get_news docstring.
+  // Map pins should reflect the whole archive, so this pulls every year on
+  // top of "latest" and merges, deduping by URL.
+  getNewsAllYears: async (startYear = 2020) => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = startYear; y <= currentYear; y++) years.push(y);
+
+    const batches = await Promise.all([
+      api.getNews(),
+      ...years.map((y) => api.getNews(undefined, y).catch(() => [])),
+    ]);
+
+    const seen = new Set();
+    const merged = [];
+    for (const batch of batches) {
+      for (const item of batch) {
+        const key = item.url || item.title;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(item);
+      }
+    }
+    return merged;
+  },
   explainSegment: (segmentId) => request(`/api/segments/${segmentId}/explain`),
 };
 

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from app.schemas import NewsItem
 
-DB_PATH = Path(__file__).resolve().parent.parent / "news_archive.db"
+DB_PATH = Path(__file__).resolve().parent.parent.parent / "news_archive.db"
 
 
 @contextmanager

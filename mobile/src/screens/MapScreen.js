@@ -13,10 +13,10 @@ import { useActiveRoute } from "../context/ActiveRouteContext";
 export default function MapScreen() {
   const mapRef = useRef(null);
   const [region, setRegion] = useState({
-    latitude: 56.1629, // Aarhus, Denmark, as a sensible default
-    longitude: 10.2039,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
+    latitude: 55.95, // centered so all of Denmark (incl. Bornholm) is visible on open,
+    longitude: 10.8, // since news pins are scattered nationwide rather than local
+    latitudeDelta: 4.2,
+    longitudeDelta: 8.5,
   });
   const [incidents, setIncidents] = useState([]);
   const [zones, setZones] = useState([]);
@@ -27,10 +27,12 @@ export default function MapScreen() {
   const { activeRoute } = useActiveRoute();
 
   // Crime news is nationwide, not tied to the current map viewport, so it's
-  // fetched once rather than re-fetched on every region change.
+  // fetched once rather than re-fetched on every region change. Pulls every
+  // archived year (not just "latest") so the map isn't dominated by
+  // this-year's news alone — see api.getNewsAllYears.
   useEffect(() => {
     api
-      .getNews()
+      .getNewsAllYears()
       .then((items) => setNewsPins(items.filter((item) => item.latitude != null)))
       .catch(() => setNewsPins([]));
   }, []);

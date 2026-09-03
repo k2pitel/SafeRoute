@@ -1,11 +1,10 @@
 """GET /api/zones — real municipality-level danger zones. WS /ws/zones — live score pushes."""
 import asyncio
-import math
 import random
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app import crime_stats
+from app.services import crime_stats
 from app.schemas import ZoneOut
 
 router = APIRouter(tags=["zones"])
@@ -47,36 +46,6 @@ def _intersects(a: tuple[float, float, float, float], b: tuple[float, float, flo
     return a_min_lon <= b_max_lon and a_max_lon >= b_min_lon and a_min_lat <= b_max_lat and a_max_lat >= b_min_lat
 
 
-def _blob_polygon(center_lat: float, center_lon: float, radius_deg: float, points: int = 10) -> dict:
-    """Fallback mock shape, used only while the real dataset is still loading/unreachable."""
-    coords = []
-    for i in range(points):
-        angle = 2 * math.pi * i / points
-        wobble = 0.75 + 0.25 * random.random()
-        coords.append(
-            [
-                center_lon + radius_deg * math.cos(angle) * wobble,
-                center_lat + radius_deg * math.sin(angle) * wobble * 0.7,
-            ]
-        )
-    coords.append(coords[0])
-    return {"type": "Polygon", "coordinates": [coords]}
-
-
-def _fallback_zones(bbox: str) -> list[ZoneOut]:
-    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox.split(","))
-    mid_lon, mid_lat = (min_lon + max_lon) / 2, (min_lat + max_lat) / 2
-    span = max(max_lon - min_lon, max_lat - min_lat)
-    return [
-        ZoneOut(
-            id="fallback-1",
-            safety_score=2.8,
-            safety_label=_label_for_score(2.8),
-            geometry=_blob_polygon(mid_lat + span * 0.18, mid_lon - span * 0.15, span * 0.12),
-        ),
-    ]
-
-
 @router.get("/api/zones", response_model=list[ZoneOut])
 def get_zones(bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat")):
     """
@@ -84,22 +53,29 @@ def get_zones(bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat"))
     per capita (Statistics Denmark — see app/crime_stats.py), filtered to
     whichever municipalities overlap the requested viewport.
 
-    Falls back to a single placeholder shape if the stats cache hasn't
-    populated yet (fetched once at startup + refreshed periodically — see
-    main.py's lifespan) or the upstream sources were unreachable.
+    Returns nothing if the stats cache hasn't populated yet (fetched once
+    at startup + refreshed periodically — see main.py's lifespan) or the
+    upstream source was unreachable, rather than a placeholder shape.
     """
     query_bbox = tuple(float(v) for v in bbox.split(","))
     stats = crime_stats.get_cached_stats()
     if not stats:
-        return _fallback_zones(bbox)
+        return []
 
+    # Municipalities with disconnected land (islands, exclaves) come back as
+    # multiple separate polygon features sharing one name — count occurrences
+    # so each piece still gets a unique id (a bare name would collide and
+    # break React's list keys on the mobile side).
+    seen_counts: dict[str, int] = {}
     zones = []
     for entry in stats:
         if not _intersects(_geometry_bbox(entry.geometry), query_bbox):
             continue
+        seen_counts[entry.name] = seen_counts.get(entry.name, 0) + 1
+        piece_id = entry.name if seen_counts[entry.name] == 1 else f"{entry.name}-{seen_counts[entry.name]}"
         zones.append(
             ZoneOut(
-                id=entry.name,
+                id=piece_id,
                 safety_score=entry.safety_score,
                 safety_label=_label_for_score(entry.safety_score),
                 geometry=entry.geometry,

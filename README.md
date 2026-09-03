@@ -285,42 +285,99 @@ An in-app **emergency/panic button** also allows the user to instantly share the
 
 ## Getting Started
 
-> These steps assume the proposed repository structure above. Adjust paths once services are actually scaffolded.
-
 **Prerequisites**
-- Docker & Docker Compose
-- Node.js (for the Expo/React Native app)
-- Python 3.11+ (for backend, ML, and OSRM bindings)
+- Python 3.11+ (backend, Celery worker, ML)
+- Node.js 18+ (Expo/React Native mobile app)
+- Docker & Docker Compose — only needed if you want to run Postgres/Redis/OSRM/backend in containers instead of natively
 
-**Local setup**
+Both `backend/.env` and `mobile/.env` already exist in this repo with working local defaults (a public demo OSRM instance, `localhost` Postgres/Redis), so you generally don't need to create them yourself — copy from the corresponding `.env.example` only if you need to override something (e.g. your own Mapbox/News API keys).
+
+### Option A — with Docker
+
+Brings up Postgres+PostGIS, Redis, an OSRM container, and builds/runs the FastAPI backend + Celery worker images.
+
 ```bash
-# 1. Clone the repo
-git clone https://github.com/<org>/saferoute.git
-cd saferoute
+# from the repo root
+docker compose -f infra/docker-compose.yml up -d --build
 
-# 2. Start core infra (Postgres+PostGIS, Redis, OSRM)
-docker compose -f infra/docker-compose.yml up -d
-
-# 3. Backend
+# apply DB migrations (backend/.env already points at localhost:5432,
+# which is where docker-compose publishes the postgres container's port)
 cd backend
+pip install -r requirements.txt   # only needed to get the local `alembic` CLI
+alembic upgrade head
+```
+
+The API is then live at `http://localhost:8000` (`/health` to check) and the worker container is already running Celery with beat scheduling.
+
+Notes:
+- The `osrm` service expects a prebuilt `.osrm` graph in `infra/osrm-data/` (see `routing/osrm/README.md` for how to generate one from an OSM extract). Without it, that one container will fail to start — harmless for local API/mobile work, since `backend/.env` defaults `OSRM_SERVER_URL` to a public demo OSRM server instead.
+- To rebuild after changing backend code/dependencies: `docker compose -f infra/docker-compose.yml up -d --build backend worker`.
+- Logs: `docker compose -f infra/docker-compose.yml logs -f backend worker`.
+- Stop everything: `docker compose -f infra/docker-compose.yml down` (add `-v` to also drop the Postgres volume).
+
+### Option B — without Docker (run everything natively)
+
+You still need a local Postgres+PostGIS and Redis — the easiest way is to run *just* those two via Docker even in this "no Docker" flow:
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres redis
+```
+or install/run them natively if you'd rather not use Docker at all.
+
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate        # Windows PowerShell; use `source .venv/bin/activate` on macOS/Linux
 pip install -r requirements.txt
-python manage.py migrate      # or alembic upgrade head
-celery -A backend worker -l info &
-uvicorn api.main:app --reload # or python manage.py runserver
 
-# 4. Mobile app
-cd ../mobile
+# apply DB migrations
+alembic upgrade head
+
+# terminal 1 — API server
+uvicorn app.main:app --reload --port 8000
+
+# terminal 2 — Celery worker (+ beat, for scheduled score recalculation)
+celery -A app.celery_app worker --beat -l info
+```
+
+Then, in another terminal, start the mobile app:
+```bash
+cd mobile
 npm install
-npx expo start
+npx expo start          # press "w" for web, or scan the QR code in Expo Go
 ```
 
-**Environment variables** (`.env`, not committed):
+The mobile app reads `EXPO_PUBLIC_API_BASE_URL` from `mobile/.env` to find the backend. See below for how to set this depending on how you're running the app.
+
+### Running on your phone (Expo Go)
+
+**Normal case — same Wi-Fi, home/unrestricted network:**
+1. Start the backend bound to all interfaces so devices on the network can reach it: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` (from `backend/`, venv activated).
+2. Find this machine's LAN IP (`ipconfig` on Windows, look for the Wi-Fi adapter's IPv4 address) and set it in `mobile/.env`: `EXPO_PUBLIC_API_BASE_URL=http://<your-lan-ip>:8000`.
+3. `cd mobile && npx expo start`, then scan the printed QR code with Expo Go (Android) or the Camera app (iOS). Your phone must be on the same Wi-Fi network as this machine.
+
+**If the app times out / Expo Go says "offline" / no data loads:**
+This usually means the network won't let your phone and PC talk to each other directly — common on university/corporate Wi-Fi (client isolation) or when Windows classifies the network as "Public" (its firewall then blocks incoming connections to `node`/`python` unless an exception was already granted, even though both devices are on the same Wi-Fi name). If you can't fix the network/firewall (e.g. it's locked down by IT policy), tunnel both services instead so traffic goes over the internet rather than the local network:
+
+1. Backend tunnel: `cloudflared tunnel --url http://localhost:8000` (no account needed; install via `winget install cloudflared` if it's missing). Copy the `https://*.trycloudflare.com` URL it prints.
+2. Set that URL in `mobile/.env`: `EXPO_PUBLIC_API_BASE_URL=https://<your-subdomain>.trycloudflare.com`.
+3. Start Expo in tunnel mode instead of the default: `npx expo start --tunnel` (from `mobile/`). This also routes the JS bundle over the internet, avoiding the same firewall issue for Metro.
+4. Scan the QR code / open the `exp://` link Expo prints in Expo Go.
+
+Note: `EXPO_PUBLIC_*` env vars are baked into the JS bundle at Metro start time — if you change `mobile/.env`, fully restart `npx expo start` (a hot reload isn't enough) for the new value to take effect.
+
+**Environment variables reference** (see `backend/.env.example` and `mobile/.env.example`):
 ```
-DATABASE_URL=postgresql://user:pass@localhost:5432/saferoute
+# backend/.env
+DATABASE_URL=postgresql://saferoute:saferoute@localhost:5432/saferoute
 REDIS_URL=redis://localhost:6379/0
 MAPBOX_ACCESS_TOKEN=...
-OSRM_SERVER_URL=http://localhost:5000
+OSRM_SERVER_URL=https://routing.openstreetmap.de/routed-foot   # or http://localhost:5000 if running OSRM locally
 NEWS_API_KEY=...
+DP_EPSILON=1.0
+
+# mobile/.env
+EXPO_PUBLIC_API_BASE_URL=http://localhost:8000
+EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=...
 ```
 
 ---
