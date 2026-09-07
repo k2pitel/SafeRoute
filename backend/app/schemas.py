@@ -1,5 +1,4 @@
 """Pydantic request/response schemas."""
-import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -31,22 +30,45 @@ class RouteOption(BaseModel):
 
 
 class ReportCreate(BaseModel):
-    user_id: uuid.UUID
+    type: str  # e.g. 'harassment' | 'assault' | 'theft' | 'suspicious' | 'other'
     latitude: float
     longitude: float
     description: Optional[str] = None
+    occurred_at: Optional[datetime] = None  # defaults to now if omitted
 
 
 class ReportOut(BaseModel):
     id: int
+    type: str
     latitude: float
     longitude: float
     description: Optional[str] = None
+    occurred_at: datetime
     confirmations: int
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str = Field(..., min_length=1)
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: str
+    email: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    user: UserOut
 
 
 class ZoneOut(BaseModel):

@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import crime_index, incidents, news, reports, routes, segments, zones
-from app.services import crime_stats, news_archive
+from app.routers import auth, crime_index, incidents, news, reports, routes, segments, zones
+from app.services import crime_stats, local_store, news_archive
 
 logger = logging.getLogger("saferoute.news_poller")
 
@@ -49,6 +49,7 @@ async def _crime_stats_refresh_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     news_archive.init_db()
+    local_store.init_db()
     poll_task = asyncio.create_task(_news_poll_loop())
     stats_task = asyncio.create_task(_crime_stats_refresh_loop())
     yield
@@ -70,6 +71,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(incidents.router)
 app.include_router(routes.router)
 app.include_router(reports.router)

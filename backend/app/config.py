@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     osrm_server_url: str = "http://localhost:5000"
     news_api_key: str = ""
     dp_epsilon: float = 1.0  # differential privacy noise budget
+    jwt_secret_key: str = "dev-insecure-secret-change-me"  # override via env in real deployments
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

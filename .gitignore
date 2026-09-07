@@ -6,6 +6,7 @@ venv/
 *.egg-info/
 model.joblib
 news_archive.db
+local_store.db
 
 # Env
 .env

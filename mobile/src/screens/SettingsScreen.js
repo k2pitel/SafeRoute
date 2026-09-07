@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { StyleSheet, View, Text, Switch, TouchableOpacity } from "react-native";
 
+import { useAuth } from "../context/AuthContext";
+
 // README > Mobile App — Pages > 5. Settings
 // Risk tolerance, notification toggles, emergency contacts, privacy controls.
 const RISK_PROFILES = ["fast", "balanced", "safest"];
 
 export default function SettingsScreen() {
+  const { user, logout } = useAuth();
   const [riskProfile, setRiskProfile] = useState("balanced");
   const [redZoneAlerts, setRedZoneAlerts] = useState(true);
   const [timeBasedAlerts, setTimeBasedAlerts] = useState(true);
@@ -13,6 +16,18 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.section}>Account</Text>
+      {user ? (
+        <View style={styles.row}>
+          <Text>{user.email}</Text>
+          <TouchableOpacity onPress={logout}>
+            <Text style={styles.link}>Log out</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Text style={styles.rowSubtitle}>Not logged in — you'll be asked to log in when you report an incident.</Text>
+      )}
+
       <Text style={styles.section}>Route preference</Text>
       <View style={styles.riskRow}>
         {RISK_PROFILES.map((profile) => (
@@ -79,4 +94,5 @@ const styles = StyleSheet.create({
   riskTextActive: { color: "white", textTransform: "capitalize" },
   linkRow: { paddingVertical: 10 },
   link: { color: "#007AFF" },
+  rowSubtitle: { color: "#666", fontSize: 13, paddingVertical: 6 },
 });

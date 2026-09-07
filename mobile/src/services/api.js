@@ -2,13 +2,36 @@
 // Base URL is read from app config / env — see mobile/.env.example.
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+// Set by AuthContext once a user logs in/out, so every request can carry
+// the session token without every call site having to pass it explicitly.
+let authToken = null;
+export function setAuthToken(token) {
+  authToken = token;
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${await res.text()}`);
+    // Prefer FastAPI's {"detail": ...} message over a generic status-code
+    // error where available. `detail` is usually a plain string (e.g.
+    // "Invalid email or password"), but on a 422 validation error it's a
+    // list of {msg, loc, ...} objects instead — join those into readable
+    // text rather than letting them stringify to "[object Object]".
+    let message = `API error ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body?.detail === "string") {
+        message = body.detail;
+      } else if (Array.isArray(body?.detail)) {
+        message = body.detail.map((issue) => issue.msg || JSON.stringify(issue)).join("; ");
+      }
+    } catch {
+      // non-JSON error body — fall back to the generic message above
+    }
+    throw new Error(message);
   }
   return res.json();
 }
@@ -18,9 +41,14 @@ export const api = {
   getZones: (bbox) => request(`/api/zones?bbox=${bbox}`),
   getRoutes: (from, to, mode = "walking") =>
     request(`/api/routes?from=${from}&to=${to}&mode=${mode}`),
+  getReports: (bbox) => request(`/api/reports?bbox=${bbox}`),
   submitReport: (report) =>
     request("/api/reports", { method: "POST", body: JSON.stringify(report) }),
   confirmReport: (id) => request(`/api/reports/${id}/confirm`, { method: "POST" }),
+  signup: (email, password) =>
+    request("/api/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: (email, password) =>
+    request("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   getCrimeIndex: (city) => request(`/api/crime-index?city=${encodeURIComponent(city)}`),
   getNews: (city, year) => {
     const params = new URLSearchParams();
