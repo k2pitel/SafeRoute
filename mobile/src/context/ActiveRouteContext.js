@@ -1,8 +1,8 @@
 import { createContext, useContext, useState } from "react";
 
-// Shared between RouteScreen (where a route is picked) and MapScreen
-// (where it gets drawn) — the two live on separate tabs, so a plain
-// TextInput-lifted-state approach doesn't reach across them.
+// Shared between RoutePanel (where a route is picked) and MapScreen (where
+// it gets drawn) — kept as context rather than local state since MapScreen
+// and MapScreen.web both need to read it, and only one of the two mounts.
 const ActiveRouteContext = createContext(null);
 
 export function ActiveRouteProvider({ children }) {

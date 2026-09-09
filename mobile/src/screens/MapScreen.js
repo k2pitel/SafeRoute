@@ -9,6 +9,7 @@ import { useActiveRoute } from "../context/ActiveRouteContext";
 import { useAuth } from "../context/AuthContext";
 import AuthPromptModal from "../components/AuthPromptModal";
 import ReportModal from "../components/ReportModal";
+import RoutePanel from "../components/RoutePanel";
 
 // News pins are geocoded to a fixed town/district center (see backend
 // app/danish_places.py) rather than the actual crime scene, so every story
@@ -136,6 +137,9 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
+      <RoutePanel />
+
+      <View style={styles.mapWrapper}>
       <MapView ref={mapRef} style={styles.map} initialRegion={region} showsUserLocation>
         {incidents.map((incident) => (
           <Marker
@@ -211,31 +215,6 @@ export default function MapScreen() {
         <Ionicons name="locate" size={24} color="#007AFF" />
       </TouchableOpacity>
 
-      <AuthPromptModal
-        visible={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onAuthenticated={() => {
-          setShowAuthModal(false);
-          setShowReportModal(true);
-        }}
-      />
-
-      <ReportModal
-        visible={showReportModal}
-        coordinate={reportCoordinate}
-        onClose={() => setShowReportModal(false)}
-        onSubmit={handleSubmitReport}
-      />
-
-      {activeRoute && (
-        <View style={styles.routeBanner}>
-          <Text style={styles.routeBannerText}>
-            {Math.round(activeRoute.option.duration_minutes)} min · Safety: {activeRoute.option.safety_label} (
-            {activeRoute.option.safety_score.toFixed(1)}/10)
-          </Text>
-        </View>
-      )}
-
       {selectedIncident && (
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>{selectedIncident.type}</Text>
@@ -263,12 +242,30 @@ export default function MapScreen() {
           </View>
         </View>
       )}
+      </View>
+
+      <AuthPromptModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onAuthenticated={() => {
+          setShowAuthModal(false);
+          setShowReportModal(true);
+        }}
+      />
+
+      <ReportModal
+        visible={showReportModal}
+        coordinate={reportCoordinate}
+        onClose={() => setShowReportModal(false)}
+        onSubmit={handleSubmitReport}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  mapWrapper: { flex: 1 },
   map: { flex: 1 },
   locateFab: {
     position: "absolute",
@@ -294,20 +291,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
   },
-  routeBanner: {
-    position: "absolute",
-    top: 12,
-    left: 20,
-    right: 20,
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 10,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-  },
-  routeBannerText: { textAlign: "center", fontWeight: "600" },
   legend: {
     position: "absolute",
     left: 16,
