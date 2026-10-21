@@ -12,9 +12,7 @@ class Settings(BaseSettings):
     data_dir: Path = BACKEND_DIR / "data"
     database_url: str = "postgresql://saferoute:saferoute@localhost:5432/saferoute"
     redis_url: str = "redis://localhost:6379/0"
-    mapbox_access_token: str = ""
     osrm_server_url: str = "http://localhost:5000"
-    news_api_key: str = ""
     dp_epsilon: float = 1.0  # differential privacy noise budget (NF11)
     jwt_secret_key: str = "dev-insecure-secret-change-me"  # override via env in real deployments
 

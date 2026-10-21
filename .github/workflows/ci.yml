@@ -32,10 +32,10 @@ jobs:
           python-version: "3.11"
       - name: Install backend deps
         working-directory: backend
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
       - name: Lint
         working-directory: backend
-        run: pip install ruff && ruff check .
+        run: ruff check .
       - name: Run tests
         working-directory: backend
         run: pytest -q
@@ -49,7 +49,7 @@ jobs:
           node-version: "20"
       - name: Install mobile deps
         working-directory: mobile
-        run: npm install
+        run: npm ci
       - name: Lint
         working-directory: mobile
         run: npm run lint

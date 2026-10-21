@@ -15,7 +15,6 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-navigation/bottom-tabs": "^6.6.1",
     "@react-navigation/native": "^6.1.18",
-    "@rnmapbox/maps": "10.1.30",
     "expo": "~57.0.30",
     "expo-font": "~57.0.4",
     "expo-location": "~57.0.21",
