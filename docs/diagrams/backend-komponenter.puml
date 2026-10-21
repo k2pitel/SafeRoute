@@ -1,0 +1,139 @@
+@startuml SafeRoute_Backend_Komponenter
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 35
+skinparam ranksep 60
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 11
+skinparam titleFontSize 20
+skinparam packageStyle rectangle
+
+skinparam component {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+  FontSize 12
+}
+skinparam component<<stub>> {
+  BackgroundColor #6E9FC7
+  FontStyle italic
+}
+skinparam interface {
+  BackgroundColor #08427B
+  BorderColor #08427B
+}
+skinparam database {
+  BackgroundColor #2E6E3E
+  FontColor white
+}
+skinparam rectangle<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 12
+  RoundCorner 16
+}
+
+title Backend API, Async Worker og Datalag: komponentdiagram (pr. kontekst)
+
+interface "REST /api/*\n+ WS /ws/zones" as REST
+
+component "main\n(create_app: composition root)" as Main
+
+package "Backend API [FastAPI] — app/api" {
+  component "dependencies\n(get_current_user_id,\nget_async_worker, bbox_query)" as Deps
+
+  package "auth (Bruger)" {
+    component "router · service\n(PBKDF2 + HMAC-token)" as CAuth
+  }
+  package "routes (Rute, UC1)" {
+    component "router · service\n(_fallback_routes NF7,\nexplain NF8)" as CRoutes
+  }
+  package "reports (Hændelsesrapport, UC2)" {
+    component "router · service\n(F2, F3, NF10,\nNF5-trigger)" as CReports
+  }
+  package "zones (Zone, F7/F5)" {
+    component "router · service" as CZones
+    component "crime_stats\n(z-score)" as CStats
+    component "updates\n(publish/subscribe)" as CBroker
+  }
+  package "news (Nyhedsartikel, F9)" {
+    component "router · service\n(poll_and_archive_once)" as CNews
+    component "backfill · places" as CNewsAux
+  }
+  component "crime_index · segments ·\nincidents" <<stub>> as CStubs
+}
+
+package "Shared kernel — app/shared" {
+  component "geo (BBox, LatLon)\nnews (NewsItem)" as Shared
+}
+
+package "Async Worker — app/worker" {
+  interface "AsyncWorker" as WIF
+  component "BackgroundAsyncWorker\n(lanceringsvariant)" as WBg
+  component "CeleryAsyncWorker\n(målarkitektur)" as WCel
+  component "jobs\n(poll_news, refresh_crime_stats,\nrecalculate_segment_scores)" as Jobs
+  package "scoring" {
+    component "features · serving (SHAP)\n· train" <<stub>> as Model
+    component "laplace\n(DP ved skrivning)" as SDP
+  }
+}
+
+package "Datalag — app/datalag" {
+  database "local_store\n(users, reports)" as DLocal
+  database "news_archive" as DNews
+  database "zone_cache\n(in-memory)" as DZones
+}
+
+package "Eksterne adaptere — app/external" {
+  component "osrm" as XOsrm
+  component "statistics_denmark" as XDst
+  component "news_sources · wayback" as XRss
+}
+
+rectangle "OSRM" <<external>> as OSRM
+rectangle "Danmarks Statistik\n+ kommunegrænser" <<external>> as DST
+rectangle "RSS-nyhedskilder\n+ Wayback Machine" <<external>> as RSS
+
+REST - Main
+Main --> CAuth
+Main --> CReports
+Main --> CRoutes
+Main --> CZones
+Main --> CNews
+Main --> CStubs
+Main --> WIF : opretter + starter
+
+CReports ..> Deps : Depends
+CReports --> DLocal
+CReports ..> WIF : submit_recalculation
+CAuth --> DLocal
+CZones --> DZones
+CZones ..> CBroker : subscribe
+CStats --> DZones
+CStats --> XDst
+CRoutes --> XOsrm
+CRoutes --> CZones : zones_along
+CNews --> DNews
+CNews --> CNewsAux
+CNews --> XRss
+
+WIF <|.. WBg
+WIF <|.. WCel
+WBg --> Jobs
+WCel --> Jobs
+Jobs --> CNews
+Jobs --> CStats
+Jobs ..> CBroker : publish
+Jobs .. Model : <<planlagt>>
+Jobs .. SDP : <<planlagt>>
+
+DNews ..> Shared
+DZones ..> Shared
+
+XOsrm --> OSRM : GET /route/v1/foot
+XDst --> DST : HTTP pull
+XRss --> RSS : HTTP pull
+@enduml

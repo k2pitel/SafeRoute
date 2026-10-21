@@ -1,0 +1,95 @@
+@startuml SafeRoute_Deployment
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 45
+skinparam ranksep 70
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 12
+skinparam titleFontSize 22
+
+skinparam node {
+  BackgroundColor #F4F6F7
+  BorderColor #7F8C8D
+  FontStyle bold
+  FontSize 14
+}
+skinparam artifact {
+  BackgroundColor #1168BD
+  FontColor white
+  FontSize 12
+}
+skinparam artifact<<geofence>> {
+  BackgroundColor #6E9FC7
+  FontColor white
+  FontStyle italic
+  FontSize 12
+}
+skinparam artifact<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 12
+}
+skinparam cloud {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 13
+}
+
+title Deployment-diagram: SafeRoute
+
+node "Brugerens telefon\n(iOS / Android)" as Phone {
+  artifact "Mobile Client\n[Expo / React Native]" as MobileArt
+  artifact "Geofence-modul\n[lokal, se afsnit 4.3]" <<geofence>> as GeofenceArt
+}
+
+node "Applikationsserver\n(container-host)" as AppServer {
+  artifact "Backend API\n[FastAPI + Uvicorn]\ncontainer: backend" as BackendArt
+  artifact "Async Worker\ncontainer: worker" as WorkerArt
+}
+
+node "Routing-server" as RoutingServer {
+  artifact "OSRM\ncontainer: osrm\n(selvhostet)" as OsrmArt
+}
+
+artifact "Push-notifikations-API" <<external>> as PushArt
+
+node "Database-server\n(container-host)" as DbServer {
+  artifact "PostgreSQL + PostGIS\ncontainer: postgres" as PgArt
+  artifact "Redis (valgfri)\ncontainer: redis" as RedisArt
+}
+
+cloud "Eksterne datakilder" as ExtCloud {
+  artifact "Danmarks Statistik m.fl." as OpenDataArt
+  artifact "Nyhedskilder" as NewsArt
+}
+
+' Fastlåst rækkefølge, så layoutet ikke krydser sig selv
+Phone -[hidden]right- AppServer
+AppServer -[hidden]right- RoutingServer
+PushArt -[hidden]right- DbServer
+DbServer -[hidden]right- ExtCloud
+
+MobileArt -right-> BackendArt : HTTPS / WSS
+
+GeofenceArt -down-> PushArt : lokal notifikation,\nuden om Backend (4.3)
+BackendArt -down-> PushArt : server-initieret push\n(fremtidigt scenarie, 4.3)
+
+BackendArt -down-> PgArt : SQL (port 5432)
+WorkerArt -down-> PgArt : SQL
+BackendArt .down.> RedisArt : enqueue\n(kun ved kø-baseret\nAsync Worker, se 4.4)
+WorkerArt .down.> RedisArt : dequeue\n(kun ved kø-baseret\nAsync Worker, se 4.4)
+
+BackendArt -right-> OsrmArt : REST (port 5000)
+WorkerArt -down-> ExtCloud : periodisk pull
+
+note bottom of GeofenceArt
+  Position og zone-polygoner evalueres
+  på telefonen. Kun selve notifikationen
+  forlader telefonen, ingen løbende
+  positions-stream til Backend.
+end note
+
+@enduml

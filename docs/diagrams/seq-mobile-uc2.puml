@@ -1,0 +1,51 @@
+@startuml SafeRoute_Seq_Mobile_UC2
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 14
+skinparam titleFontSize 20
+skinparam sequenceArrowFontSize 12
+skinparam sequenceLifeLineBorderColor #7F8C8D
+skinparam participant {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam actor {
+  BackgroundColor #08427B
+  FontColor white
+}
+
+title Mobile Client: UC2 Indrapportér hændelse (internt forløb)
+
+actor Bruger
+participant "MapScreen" as Map
+participant "AuthPromptModal" as AuthModal
+participant "AuthContext" as Auth
+participant "ReportModal" as Report
+participant "api" as Api
+
+Bruger -> Map : trykker rapportér-knap
+Map -> Map : requestForegroundPermissions\n+ getCurrentPosition
+alt tilladelse afvist (2a)
+  Map -> Map : afbryd
+end
+Map -> Map : reportCoordinate = position
+alt user == null (3a)
+  Map -> AuthModal : visible = true
+  Bruger -> AuthModal : email + adgangskode
+  AuthModal -> Auth : login() / signup()
+  Auth -> Api : POST /api/auth/login|signup
+  Api --> Auth : {access_token, user}
+  Auth -> Api : setAuthToken(token)
+  Auth -> Auth : gem i SecureStore
+  AuthModal -> Map : onAuthenticated()
+end
+Map -> Report : visible = true
+Bruger -> Report : type, tidspunkt, beskrivelse
+Report -> Report : occurred_at = nu - minutesAgo
+Report -> Map : onSubmit(payload)
+Map -> Api : submitReport(payload)\n(Bearer-token tilføjes automatisk)
+Api --> Map : ReportOut (confirmations = 0)
+Map -> Map : tilføj orange markør,\nluk ReportModal
+@enduml

@@ -1,0 +1,101 @@
+@startuml SafeRoute_Domaenemodel
+scale 1.5
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 45
+skinparam ranksep 55
+skinparam defaultFontSize 16
+skinparam titleFontSize 22
+skinparam ArrowFontSize 14
+skinparam class {
+  FontSize 16
+  FontStyle bold
+  AttributeFontSize 14
+  BackgroundColor #F3E5F5
+  BorderColor #8E44AD
+  ArrowColor #555555
+}
+
+title Domænemodel for SafeRoute (brugerperspektiv)
+
+class Bruger {
+  navn
+  email
+  risikoprofil
+}
+
+class Rute {
+  oprindelse
+  destination
+  tidspunkt
+}
+
+class Ruteforslag {
+  rejsetid
+  trygsedsscore
+  forklaring
+}
+
+class Vejsegment {
+  geometri
+  trygsedsscore
+  tidsBucket (dag/aften/nat)
+  forklaring
+}
+
+class Hændelsesrapport {
+  type
+  tidspunkt
+  beskrivelse
+  status
+}
+
+class Nyhedsartikel {
+  kilde
+  dato
+  resumé
+}
+
+class By {
+  navn
+}
+
+class CrimeIndex {
+  crimeIndex
+  safetyIndex
+  undermålinger
+  aiResumé
+  bidragydere
+  sidstOpdateret
+}
+
+class Zone {
+  polygon
+  risikoniveau
+  kilde
+}
+
+class Notifikation {
+  type
+  tidspunkt
+  besked
+}
+
+Bruger "1" -- "0..*" Rute : søger >
+Rute "1" -- "1..*" Ruteforslag : giver >
+Ruteforslag "1" -- "1..*" Vejsegment : består af >
+
+Bruger "1" -- "0..*" Hændelsesrapport : indsender >
+Hændelsesrapport "0..*" -- "0..*" Vejsegment : ligger på/nær >
+Bruger "0..*" -- "0..*" Hændelsesrapport : verificerer >
+
+By "1" -- "1" CrimeIndex : har >
+By "1" -- "0..*" Nyhedsartikel : nævnes i >
+By "1" -- "0..*" Zone : indeholder >
+By "1" -- "0..*" Vejsegment : indeholder >
+
+Bruger "0..*" -- "0..*" Zone : overvåges mod >
+Bruger "1" -- "0..*" Notifikation : modtager >
+
+@enduml

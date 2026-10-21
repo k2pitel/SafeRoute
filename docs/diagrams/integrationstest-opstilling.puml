@@ -1,0 +1,57 @@
+@startuml SafeRoute_Integrationstest_Opstilling
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 11
+skinparam titleFontSize 20
+
+skinparam node {
+  BackgroundColor #F4F7FA
+  BorderColor #0B4C8C
+}
+skinparam rectangle<<container>> {
+  BackgroundColor #1168BD
+  FontColor white
+  RoundCorner 16
+}
+skinparam rectangle<<test>> {
+  BackgroundColor #08427B
+  FontColor white
+  RoundCorner 16
+}
+skinparam rectangle<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  RoundCorner 16
+}
+skinparam database {
+  BackgroundColor #2E6E3E
+  FontColor white
+}
+
+title Opstilling for integrationstest
+
+node "Udviklermaskine (Windows 10)" {
+  rectangle "**run.mjs** [Node 22]\nTelefon A / B / C =\nseparate instanser af\nmobile/src/services/api.js" <<test>> as Harness
+  rectangle "**Backend API :8001**\n[FastAPI/Uvicorn]\n+ Async Worker-løkker" <<container>> as B1
+  rectangle "**Backend API :8002**\nOSRM_SERVER_URL =\n127.0.0.1:9 (lukket port)" <<container>> as B2
+  database "Datalag\n(SQLite i midlertidig mappe)" as DB
+}
+
+rectangle "OSRM\n(routing.openstreetmap.de)" <<external>> as OSRM
+rectangle "Danmarks Statistik\n+ kommunegrænser" <<external>> as DST
+rectangle "RSS-nyhedskilder" <<external>> as RSS
+rectangle "Nominatim" <<external>> as Nom
+
+Harness --> B1 : REST + WebSocket\n(telefon A, B)
+Harness --> B2 : REST (telefon C)
+Harness --> Nom : geocoding.js
+B1 --> DB
+B2 --> DB
+B1 --> OSRM
+B1 --> DST
+B1 --> RSS
+@enduml

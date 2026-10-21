@@ -1,0 +1,55 @@
+@startuml SafeRoute_Seq_Backend_UC2
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 14
+skinparam titleFontSize 20
+skinparam sequenceArrowFontSize 12
+skinparam sequenceLifeLineBorderColor #7F8C8D
+skinparam participant {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam database {
+  BackgroundColor #2E6E3E
+  FontColor white
+}
+
+title Backend API: UC2 Indrapportér hændelse (internt forløb)
+
+participant "Mobile Client" as Client
+participant "reports\n(router)" as Router
+participant "services.auth\nget_current_user_id" as Auth
+participant "schemas\nReportCreate/ReportOut" as Schema
+database "local_store\n(reports)" as Store
+
+Client -> Router : POST /api/reports\nAuthorization: Bearer <token>\n{type, lat, lon, description, occurred_at}
+activate Router
+Router -> Auth : Depends(get_current_user_id)
+activate Auth
+Auth -> Auth : decode_token():\nHMAC-signatur + exp
+alt token mangler / ugyldig / udløbet
+  Auth --> Client : 401 "Login required" /\n"Session expired"
+else gyldig
+  Auth --> Router : user_id
+end
+deactivate Auth
+Router -> Schema : valider body (ReportCreate)
+alt valideringsfejl
+  Schema --> Client : 422 + detaljer
+end
+Router -> Store : create_report(user_id, payload)
+activate Store
+Store -> Store : INSERT ... confirmations = 0\n(occurred_at := nu, hvis udeladt)
+Store --> Router : række
+deactivate Store
+Router -> Schema : ReportOut (uden user_id)
+Router --> Client : 201 Created\n{id, type, lat, lon, confirmations: 0, ...}
+deactivate Router
+
+note over Router, Store
+  GET /api/reports?bbox= læser direkte fra samme tabel,
+  så rapporten er synlig ved næste forespørgsel (NF4).
+end note
+@enduml

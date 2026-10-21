@@ -59,7 +59,7 @@ export const api = {
   },
   // Latest-only (no `year`) merges live feeds with just the most-recently
   // archived items, so with years of archive built up it's almost entirely
-  // this year's news — see backend/app/routers/news.py's get_news docstring.
+  // this year's news — see backend/app/api/news/router.py's get_news docstring.
   // Map pins should reflect the whole archive, so this pulls every year on
   // top of "latest" and merges, deduping by URL.
   getNewsAllYears: async (startYear = 2020) => {

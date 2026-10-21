@@ -11,4 +11,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 
-CMD ["celery", "-A", "app.celery_app", "worker", "--beat", "-l", "info"]
+# Async Worker, target architecture (afsnit 4.3.4.5): Celery worker + Beat.
+CMD ["celery", "-A", "app.worker.celery_app", "worker", "--beat", "-l", "info"]

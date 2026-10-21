@@ -1,0 +1,76 @@
+@startuml SafeRoute_Systemgraense
+scale 1.4
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 60
+skinparam ranksep 90
+skinparam ArrowColor #666666
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 13
+skinparam titleFontSize 22
+skinparam rectangleBorderThickness 0
+
+skinparam folder {
+  BackgroundColor #EDEDED
+  BorderColor #7F8C8D
+  FontStyle bold
+  FontSize 15
+}
+
+skinparam rectangle<<person>> {
+  BackgroundColor #08427B
+  FontColor white
+  FontSize 15
+  RoundCorner 20
+}
+skinparam rectangle<<system>> {
+  BackgroundColor #1168BD
+  FontColor white
+  FontStyle bold
+  FontSize 16
+  RoundCorner 20
+}
+skinparam rectangle<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 14
+  RoundCorner 20
+}
+
+title System Context Diagram: SafeRoute (arkitekturperspektiv)
+
+rectangle "**Bruger**\n(fodgænger)\n\nTilgår systemet via\nmobilklienten" <<person>> as Bruger
+
+folder "SW System" as SWSystem {
+  rectangle "**Mobile Client**\n[React Native / Expo]\n\nKort, rutevalg,\nindrapportering,\nlokal geofence-evaluering" <<system>> as Mobile
+  rectangle "**Backend API**\n[FastAPI]\n\nRuter, zoner, scorer,\nrapporter, auth" <<system>> as Backend
+}
+
+folder "External Boundaries" as ExternalBoundaries {
+  rectangle "**OSRM**\n[Rutemotor]\n\nBeregner kandidat-ruter\n(tid, geometri) for gang" <<external>> as OSRM
+  rectangle "**Danmarks Statistik m.fl.**\n[Offentlig datakilde]\n\nKommunale kriminalitets-\nog belysningsdata" <<external>> as OpenData
+  rectangle "**Nyhedskilder**\n[Ekstern datakilde]\n\nRSS/API med\nkriminalitetsrelaterede\nnyheder" <<external>> as News
+  rectangle "**OS-notifikationstjeneste**\n[Ekstern tjeneste]\n\nExpo/Apple/Google:\nleverer/viser push- og\nlokale notifikationer" <<external>> as Push
+}
+
+Bruger -down-> Mobile : Søger ruter,\nindrapporterer,\ndeler live-position
+Mobile -up-> Bruger : Ruteforslag, score,\nforklaring, advarsler
+
+Mobile -right-> Backend : REST/WebSocket
+
+Backend -down-> OSRM : Forespørger\nkandidat-ruter (REST)
+Backend -down-> OpenData : Henter periodisk\n(REST/pull)
+Backend -down-> News : Henter periodisk\n(REST/pull)
+
+Mobile -[#8C8C8C]down-> Push : Planlægger/viser\nnotifikation lokalt
+Push -[#8C8C8C]up-> Bruger : Viser notifikation\npå telefonen
+
+note bottom of Mobile
+  Mobile Client indgår i systemgrænsen (SW System):
+  geofence-tjek mod cachede zone-polygoner
+  køres lokalt på telefonen (se afsnit 4.3),
+  ikke som et separat eksternt system
+end note
+
+@enduml

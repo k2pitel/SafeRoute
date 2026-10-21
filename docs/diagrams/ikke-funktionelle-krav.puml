@@ -1,0 +1,32 @@
+@startmindmap SafeRoute_IkkeFunktionelleKrav
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 15
+skinparam ArrowColor #666666
+
+* Ikke-funktionelle krav
+
+**[#DCEEFB] Performance
+***_ NF1: Performance
+***_ NF2: Præcision
+***_ NF3: Realtidsovervågning
+
+**[#E4F5E0] Pålidelighed
+***_ NF4: Datafriskhed
+***_ NF5: Pålidelighed
+***_ NF6: Oppetid
+***_ NF7: Robusthed
+
+**[#FDE9C8] Brugervenlighed
+***_ NF8: Forklarlighed
+***_ NF9: Brugervenlighed
+
+**[#F3E5F5] Sikkerhed og privatliv
+***_ NF10: Sikkerhed (spam)
+***_ NF11: Privatliv og GDPR
+
+**[#F9E0E0] Kompatibilitet og skalerbarhed
+***_ NF12: Kompatibilitet
+***_ NF13: Skalerbarhed
+
+@endmindmap

@@ -3,6 +3,7 @@
 // paid geocoder (Mapbox/Google) or a self-hosted Nominatim instance, since
 // the public one is rate-limited (~1 req/sec) and asks for attribution.
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_USER_AGENT = "SafeRoute/0.1 (pedestrian safety app, student project)";
 
 // How far around `near` to softly prefer results from, in degrees
 // (~0.2 ≈ 20km). Soft bias, not a hard cutoff — distant matches can still
@@ -24,7 +25,7 @@ function splitLabel(item) {
   return { primary, secondary };
 }
 
-function dedupe(places) {
+export function dedupe(places) {
   const seen = new Set();
   const out = [];
   for (const place of places) {
@@ -56,25 +57,29 @@ export async function searchPlaces(query, { limit = 6, near } = {}) {
     // Soft bias (not "bounded=1"), so relevant far-away matches aren't hidden.
   }
 
+  // Network or HTTP failure throws, so the caller can tell the user instead
+  // of showing an empty list that looks like "no matches" (ch. 6, I1.1).
+  let res;
   try {
-    const res = await fetch(`${NOMINATIM_URL}?${params}`, {
-      headers: { "Accept-Language": "en" },
+    res = await fetch(`${NOMINATIM_URL}?${params}`, {
+      // Nominatim's usage policy requires identifying the application.
+      headers: { "Accept-Language": "en", "User-Agent": NOMINATIM_USER_AGENT },
     });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const places = data.map((item) => {
-      const { primary, secondary } = splitLabel(item);
-      return {
-        id: String(item.place_id),
-        label: item.display_name,
-        primary,
-        secondary,
-        latitude: parseFloat(item.lat),
-        longitude: parseFloat(item.lon),
-      };
-    });
-    return dedupe(places).slice(0, limit);
   } catch {
-    return [];
+    throw new Error("Place search is unavailable — check your connection");
   }
+  if (!res.ok) throw new Error(`Place search is unavailable right now (HTTP ${res.status})`);
+  const data = await res.json();
+  const places = data.map((item) => {
+    const { primary, secondary } = splitLabel(item);
+    return {
+      id: String(item.place_id),
+      label: item.display_name,
+      primary,
+      secondary,
+      latitude: parseFloat(item.lat),
+      longitude: parseFloat(item.lon),
+    };
+  });
+  return dedupe(places).slice(0, limit);
 }

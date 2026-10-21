@@ -25,7 +25,7 @@ Existing map services (Google Maps, Apple Maps) optimize almost exclusively for 
 - [Machine Learning Approach](#machine-learning-approach)
 - [Privacy](#privacy)
 - [Security Considerations](#security-considerations)
-- [Bonus: Geofenced Push Notifications](#bonus-geofenced-push-notifications)
+- [Geofenced Push Notifications](#geofenced-push-notifications)
 - [Getting Started](#getting-started)
 - [Testing Strategy](#testing-strategy)
 - [Academic Relevance (Software Engineering)](#academic-relevance-software-engineering)
@@ -69,37 +69,89 @@ Heterogeneous geospatial data sources — crime statistics, street lighting, ped
 
 ## Repository Structure
 
-Proposed monorepo layout (subject to change as services are split out):
+Two levels, both taken from the report:
+
+1. **Top level = the four subsystems** of the container diagram (figur 4.2):
+   Mobile Client, Backend API, Async Worker and Datalag. They are the
+   deployment units in figur 4.3, and chapter 5 describes each one on its own.
+2. **Inside a subsystem = one folder per bounded context**, named after the
+   domain model (afsnit 3.4) and the endpoints in tabel 4.1. Everything about
+   one concept (e.g. Hændelsesrapport) sits in one folder instead of being
+   spread over routers/, services/ and schemas/.
 
 ```
 saferoute/
-├── mobile/                 # React Native + Expo app
-│   ├── src/
-│   │   ├── screens/        # Map, Route, News, CrimeIndex, Settings
-│   │   ├── components/
-│   │   ├── navigation/
-│   │   └── services/       # API clients, geofence logic
-│   └── app.json
+├── mobile/                          # Mobile Client — React Native + Expo
+│   ├── app.json, package.json       # Expo + npm config (ESLint config in package.json)
+│   └── src/
+│       ├── index.js, App.js         # entry point; providers around the tab navigator
+│       ├── navigation/              # AppNavigator: Map, News, Crime Index, Settings
+│       ├── features/                # one folder per screen / use case, tests in __tests__/
+│       │   ├── map/                 #   Kort (F7, F8): MapScreen, useMapData, MapLegend, MarkerInfoCards
+│       │   ├── routes/              #   Rute, UC1 (F1, F6): RoutePanel, PlaceSearchInput, rankRoutes
+│       │   ├── walk/                #   Gåtur, F5: useWalkMonitor (geofence while walking)
+│       │   ├── reports/             #   Hændelsesrapport, UC2 (F2): ReportModal
+│       │   ├── auth/                #   Bruger: AuthContext, AuthPromptModal
+│       │   ├── news/                #   Nyhedsartikel, F9: NewsScreen
+│       │   ├── crimeIndex/          #   By/CrimeIndex, F4: CrimeIndexScreen
+│       │   └── settings/            #   F6: SettingsContext, SettingsScreen
+│       ├── services/                # boundary to the outside world (afsnit 5.5.1.1): api (all
+│       │                            #   Backend API calls), geocoding (Nominatim), location + geofence (OS)
+│       ├── ui/                      # design-system primitives: Button, ChipGroup, BottomSheet, InfoCard
+│       └── theme/                   # design tokens
 ├── backend/
-│   ├── api/                # REST + WebSocket endpoints
-│   ├── workers/            # Celery tasks (score recalculation, news ingest)
-│   ├── models/              # ORM models (PostgreSQL/PostGIS)
-│   └── privacy/            # Laplace differential privacy layer
-├── ml/
-│   ├── training/            # Model training scripts
-│   ├── features/            # Feature engineering pipelines
-│   ├── explainability/      # SHAP integration
-│   └── serving/             # Model inference API
-├── routing/
-│   └── osrm/                 # OSRM config, profiles, Python bindings
-├── infra/
-│   ├── docker/               # Dockerfiles per service
-│   ├── docker-compose.yml
-│   └── .github/workflows/    # CI/CD pipelines
+│   ├── pyproject.toml, requirements.txt, alembic.ini
+│   ├── data/                        # dev-time SQLite files (git-ignored)
+│   ├── app/
+│   │   ├── main.py                  # composition root: create_app() wires the subsystems
+│   │   ├── config.py
+│   │   ├── shared/                  # shared kernel: geo (BBox, LatLon), news (NewsItem)
+│   │   ├── api/                     # Delsystem Backend API (afsnit 5.2)
+│   │   │   ├── routers.py           #   every context's router, registered by main
+│   │   │   ├── dependencies.py      #   DI: auth gate, Async Worker, query parsing
+│   │   │   ├── auth/                #   Bruger          router · service · schemas
+│   │   │   ├── routes/              #   Rute, UC1       router · service · schemas
+│   │   │   ├── reports/             #   Hændelsesrapport, UC2
+│   │   │   ├── zones/               #   Zone, F7/F5     + crime_stats, updates (/ws/zones)
+│   │   │   ├── news/                #   Nyhedsartikel   + backfill, places
+│   │   │   ├── crime_index/         #   By/CrimeIndex, F4
+│   │   │   ├── segments/            #   Vejsegment, NF8
+│   │   │   └── incidents/           #   Incident, F8
+│   │   ├── worker/                  # Delsystem Async Worker (afsnit 5.3)
+│   │   │   ├── base.py              #   AsyncWorker interface + shared schedule
+│   │   │   ├── background.py        #   launch variant: asyncio tasks in the API process
+│   │   │   ├── celery_*.py, tasks.py#   target: Celery + Beat
+│   │   │   ├── jobs.py              #   the jobs both variants run
+│   │   │   └── scoring/             #   scoring pipeline: features, train, serving (SHAP), laplace (NF11)
+│   │   ├── datalag/                 # Delsystem Datalag (afsnit 5.4): local_store, news_archive
+│   │   │                            #   (SQLite), zone_cache (memory), models + migrations/ (PostGIS)
+│   │   └── external/                # adapters for afsnit 4.1's external relations:
+│   │                                #   osrm, statistics_denmark, news_sources, wayback
+│   └── tests/
+│       ├── unit/                    # one component in isolation (tabel 5.2)
+│       └── integration/             # router -> service -> datalag/external (tabel 5.3)
+├── infra/                           # deployment, figur 4.3: docker-compose + Dockerfiles + osrm/README.md
+├── tests/integration/               # kapitel 6: serve.py + run.mjs (real mobile services vs. real backend)
 ├── docs/
-│   └── wireframes/           # Whiteboard sketches, design references
-└── README.md
+│   ├── report/                      # the report PDF export + the AU report template
+│   ├── diagrams/                    # PlantUML sources for every figure
+│   ├── images/                      # rendered figures + whiteboard wireframes
+│   └── drafts/                      # older chapter drafts (.md); the Google Doc is the source of truth
+└── .github/workflows/ci.yml         # lint + tests for backend and mobile, Docker build
 ```
+
+Rules that keep the boundaries from the report:
+
+- **Dependencies only point downwards:** `api` → `datalag` / `external`, and
+  `worker` → `api` services → `datalag` / `external`. The Datalag never imports
+  the Backend API; what both need lives in `shared/`.
+- **Inside a context:** `router.py` is the boundary (HTTP only), `service.py`
+  the control layer (no HTTP, no SQL), `schemas.py` the contract (afsnit 5.2.1.1).
+- **Between contexts:** a context may call another context's `service`
+  (routes → zones for `zones_along`), never its router.
+- **The Async Worker** is reached only through the `AsyncWorker` interface, so
+  its realisation (`ASYNC_WORKER=background|celery`) can change without
+  touching the other subsystems (afsnit 4.3.4.5).
 
 ---
 
@@ -218,7 +270,7 @@ User preferences: default risk tolerance, notification settings, emergency conta
 
 ## Wireframes & UI Sketches
 
-Early whiteboard wireframes for the core screens (see `/docs/wireframes/` for the raw photos):
+Early whiteboard wireframes for the core screens (see `/docs/images/wireframes/` for the raw photos):
 
 **Map Design**
 - Map view marks each reported incident with an `X` (legend: *X = Crimes*).
@@ -266,20 +318,22 @@ All user-submitted location and report data is aggregated and perturbed using a 
 ## Security Considerations
 
 - **Report abuse/spam**: real-time community reports require nearby-user confirmation before meaningfully affecting public scores; rate-limiting and anomaly detection on the reports endpoint.
-- **Location data handling**: live location is only transmitted while the app is in active navigation/geofence mode; historical location traces are not persisted beyond what's needed for the current session.
+- **Location data handling**: geofence and time-of-day checks during an active walk run entirely on-device (see [Geofenced Push Notifications](#geofenced-push-notifications)) — live position is not streamed to the backend while walking. Location is only sent to the backend when the user actively searches a route or submits an incident report, and historical location traces are not persisted beyond what's needed for that request.
 - **Differential privacy**: aggregated report/location data is perturbed (Laplace mechanism) before contributing to public-facing scores or heatmaps — see [Privacy](#privacy).
 - **Auth**: standard JWT/OAuth2 for API access; emergency contact sharing requires explicit per-contact opt-in.
 - **Data source integrity**: official crime data and news are tagged by source and confidence; community reports are weighted lower until confirmed.
 
 ---
 
-## Bonus: Geofenced Push Notifications
+## Geofenced Push Notifications
 
-Planned via **geofencing**: the app monitors the user's live location against known red/high-risk zones and time thresholds, triggering push notifications such as:
+Implemented (`mobile/src/services/geofence.js`), not just planned: the app monitors the user's live location against known red/high-risk zones and time thresholds, triggering local push notifications such as:
 - *"You have entered a high-risk zone. Please stay alert."*
 - *"It's now past midnight — incidents are historically more frequent at this hour. Please take extra care."*
 
-An in-app **emergency/panic button** also allows the user to instantly share their live location with pre-selected trusted contacts.
+Both conditions run **on-device**, not on the backend. `startGeofenceWatch()` calls `Location.watchPositionAsync` (every 15s or 25m — matching NF3) and, for each new position, checks it against a cached list of red-zone polygons (`GET /api/zones`) with a plain ray-casting point-in-polygon test, plus a separate check for late-night hours (00:00–05:00). A hit on either condition schedules an immediate local notification via `expo-notifications` directly, with no round trip to the backend. This is a deliberate architecture choice, not just an implementation detail: it keeps alert latency bound to the phone's own location-update interval instead of a network round trip, and it means the backend never receives a continuous stream of a user's live position while they walk — only the positions they actively share via a route search or an incident report. See the report's afsnit 4.2.2 for the full risk analysis and `docs/diagrams/seq-geofence.puml` for the sequence diagram.
+
+The in-app **emergency/panic button** that shares live location with pre-selected trusted contacts is a settings-screen placeholder only (`mobile/src/features/settings/SettingsScreen.js`) and is explicitly out of scope for this iteration — see the report's afsnit 3.2.2.
 
 ---
 
@@ -310,7 +364,7 @@ alembic upgrade head
 The API is then live at `http://localhost:8000` (`/health` to check) and the worker container is already running Celery with beat scheduling.
 
 Notes:
-- The `osrm` service expects a prebuilt `.osrm` graph in `infra/osrm-data/` (see `routing/osrm/README.md` for how to generate one from an OSM extract). Without it, that one container will fail to start — harmless for local API/mobile work, since `backend/.env` defaults `OSRM_SERVER_URL` to a public demo OSRM server instead.
+- The `osrm` service expects a prebuilt `.osrm` graph in `infra/osrm-data/` (see `infra/osrm/README.md` for how to generate one from an OSM extract). Without it, that one container will fail to start — harmless for local API/mobile work, since `backend/.env` defaults `OSRM_SERVER_URL` to a public demo OSRM server instead.
 - To rebuild after changing backend code/dependencies: `docker compose -f infra/docker-compose.yml up -d --build backend worker`.
 - Logs: `docker compose -f infra/docker-compose.yml logs -f backend worker`.
 - Stop everything: `docker compose -f infra/docker-compose.yml down` (add `-v` to also drop the Postgres volume).
@@ -332,11 +386,14 @@ pip install -r requirements.txt
 # apply DB migrations
 alembic upgrade head
 
-# terminal 1 — API server
-uvicorn app.main:app --reload --port 8000
+# Without terminal 2, the API runs the Async Worker's launch variant
+# in-process (ASYNC_WORKER=background, the default) — enough for local dev.
 
-# terminal 2 — Celery worker (+ beat, for scheduled score recalculation)
-celery -A app.celery_app worker --beat -l info
+# terminal 1 — API server, handing background work to Celery instead
+ASYNC_WORKER=celery uvicorn app.main:app --reload --port 8000
+
+# terminal 2 — Async Worker target architecture: Celery worker + beat
+celery -A app.worker.celery_app worker --beat -l info
 ```
 
 Then, in another terminal, start the mobile app:
@@ -386,11 +443,11 @@ EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=...
 
 | Layer | Approach |
 |---|---|
-| Backend API | Unit tests (pytest) per endpoint; contract tests against the OpenAPI spec |
-| ML models | Offline evaluation on held-out historical data (precision/recall on high-risk segment classification); SHAP output sanity checks |
-| Routing | Integration tests comparing OSRM baseline routes vs. safety-adjusted routes for known test cities |
-| Mobile app | Component tests (Jest + React Native Testing Library); manual QA on wireframed flows above |
-| CI/CD | GitHub Actions run lint + tests on every PR; Docker image build verified before merge to `main` |
+| Backend (kapitel 5) | `cd backend && .venv/Scripts/python -m pytest` — `tests/unit/` (one component, tabel 5.2) and `tests/integration/` (router → service → Datalag/external with mocked network, tabel 5.3) |
+| Mobile (kapitel 5) | `cd mobile && npm test` — Jest (jest-expo) for the service layer and pure feature logic (geofence, api errors, geocoding, route ranking); `npm run lint` |
+| Integration (kapitel 6) | Start `tests/integration/serve.py` on ports 8001/8002 (/8003), then `node tests/integration/run.mjs` — the unchanged mobile services against real backends, no mocks. `--load` adds the NF1 load tests |
+| ML models | Offline evaluation on held-out historical data; SHAP output sanity checks (planned) |
+| CI/CD | `.github/workflows/ci.yml`: ruff + pytest, ESLint + Jest, Docker image build |
 
 ---
 
@@ -417,7 +474,7 @@ SafeRoute is primarily a software engineering project and fits naturally within 
 - [ ] React Native + Expo app shell (5 pages)
 - [ ] Mapbox GL JS map + zone color overlays
 - [ ] Differential privacy layer for aggregated reports
-- [ ] Geofencing + push notification service
+- [x] Geofencing + push notification service (client-side, local notifications — see [Geofenced Push Notifications](#geofenced-push-notifications))
 - [ ] Docker Compose for local dev, GitHub Actions CI/CD
 
 ---

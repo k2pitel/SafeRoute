@@ -1,15 +1,16 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
-import MapScreen from "../screens/MapScreen";
-import NewsScreen from "../screens/NewsScreen";
-import CrimeIndexScreen from "../screens/CrimeIndexScreen";
-import SettingsScreen from "../screens/SettingsScreen";
+import MapScreen from "../features/map/MapScreen";
+import NewsScreen from "../features/news/NewsScreen";
+import CrimeIndexScreen from "../features/crimeIndex/CrimeIndexScreen";
+import SettingsScreen from "../features/settings/SettingsScreen";
 
 const Tab = createBottomTabNavigator();
 
-// Maps each tab to a page from README > Mobile App — Pages. Routing lives
-// in a panel on the Map tab itself (see RoutePanel) rather than its own tab.
+// The screens from the product vision (afsnit 3.2.1): Kort, Nyheder,
+// Bytryghedsoversigt, Indstillinger. Rute lives as a panel on the Map tab
+// (features/routes/RoutePanel) rather than its own tab.
 const ICONS = {
   Map: "map",
   News: "newspaper",

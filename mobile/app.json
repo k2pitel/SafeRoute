@@ -20,7 +20,8 @@
     "plugins": [
       "expo-location",
       "expo-status-bar",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ]
   }
 }

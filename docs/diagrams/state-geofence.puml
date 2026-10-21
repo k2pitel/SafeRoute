@@ -1,0 +1,43 @@
+@startuml SafeRoute_State_Geofence
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam titleFontSize 20
+skinparam state {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+  ArrowColor #555555
+}
+
+title Mobile Client: tilstandsmaskine i geofence.js (pr. positionsopdatering)
+
+[*] --> GaaturAktiv : startGeofenceWatch(redZones)
+
+state "Gåtur aktiv" as GaaturAktiv {
+  state "Zone-condition" as Zone {
+    [*] --> UdenforZone : lastZoneState = false
+    UdenforZone --> IZone : ny position inde i\nen rødzone-polygon\n/ notify("dangerous zone")
+    IZone --> IZone : ny position stadig i zone\n/ (ingen notifikation)
+    IZone --> UdenforZone : ny position udenfor alle zoner
+    UdenforZone --> UdenforZone : ny position udenfor
+  }
+  --
+  state "Tids-condition" as Tid {
+    [*] --> Dag
+    Dag --> SenNat : time i [00;05[\nog time != lastHourAlerted\n/ notify("It's now HH:00")
+    SenNat --> SenNat : ny time i [00;05[\n/ notify igen
+    SenNat --> Dag : time >= 05
+  }
+}
+
+GaaturAktiv --> [*] : watch stoppes
+
+note right of GaaturAktiv
+  Opdatering: watchPositionAsync med
+  timeInterval 15 s, distanceInterval 25 m (NF3).
+  Kantdetektering (kun ved overgang) forhindrer
+  en notifikation for hver opdatering i zonen.
+end note
+@enduml

@@ -1,0 +1,64 @@
+@startuml SafeRoute_Aktoerkontekst
+scale 1.4
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 70
+skinparam ranksep 110
+skinparam ArrowColor #666666
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 13
+skinparam titleFontSize 22
+skinparam rectangleBorderThickness 0
+
+skinparam rectangle<<person>> {
+  BackgroundColor #08427B
+  FontColor white
+  FontSize 15
+  RoundCorner 20
+}
+skinparam rectangle<<system>> {
+  BackgroundColor #1168BD
+  FontColor white
+  FontStyle bold
+  FontSize 19
+  RoundCorner 20
+}
+skinparam rectangle<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 15
+  RoundCorner 20
+}
+
+title System Context Diagram: SafeRoute
+
+rectangle "**Bruger**\n(fodgænger)\n\nDen primære slutbruger,\nsom navigerer til fods" <<person>> as Bruger
+rectangle "**Andre brugere**\n(lokalsamfundet)\n\nBrugere i nærheden, der\nbekræfter indrapporteringer" <<person>> as Community
+
+rectangle "**SafeRoute**\n\n[Software System]\n\nBeregner tryghedsscorer og\nzoner automatisk (AI),\nløbende opdateret med\ntid på døgnet, og\nforeslår trygge gåruter" <<system>> as System
+
+rectangle "**Offentlige datakilder**\n\n[Ekstern datakilde]\n\nKriminalitets-, belysnings-\nog kortdata" <<external>> as OpenData
+rectangle "**Nyhedskilder**\n\n[Ekstern datakilde]\n\nKriminalitetsrelaterede\nnyhedsartikler" <<external>> as News
+rectangle "**Push-notifikationstjeneste**\n\n[Ekstern tjeneste]\n\nLeverer notifikationer\ntil brugerens telefon" <<external>> as Push
+
+' Kolonne til venstre (aktører)
+Bruger -[hidden]down- Community
+
+' Kolonne til højre (datakilder)
+OpenData -[hidden]down- News
+News -[hidden]down- Push
+
+Bruger -right-> System : Søger ruter og\nindrapporterer hændelser
+System -left-> Bruger : Viser ruteforslag,\nscore og forklaring
+
+Bruger -[#08427B]right-> System : Deler live-position\nunder gåtur (til overvågning)
+
+Community -right-> System : Bekræfter/afviser\nindrapporteringer
+
+System -right-> OpenData : Henter data fra
+System -right-> News : Henter data fra
+System -right-> Push : Sender geofence- og\ntidsbaserede alarmer
+Push -[#8C8C8C]up-> Bruger : Leverer notifikation
+
+@enduml

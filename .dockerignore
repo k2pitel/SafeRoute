@@ -1,0 +1,11 @@
+# Build context for infra/docker/*.Dockerfile is the repo root.
+.git
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.env
+backend/.venv
+backend/data
+mobile
+docs
+infra/osrm-data

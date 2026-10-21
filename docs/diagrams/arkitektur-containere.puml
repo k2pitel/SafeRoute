@@ -1,0 +1,84 @@
+@startuml SafeRoute_Arkitektur
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 45
+skinparam ranksep 70
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 12
+skinparam titleFontSize 22
+skinparam packageStyle rectangle
+
+skinparam rectangle<<person>> {
+  BackgroundColor #08427B
+  FontColor white
+  FontSize 14
+  RoundCorner 20
+}
+skinparam rectangle<<container>> {
+  BackgroundColor #1168BD
+  FontColor white
+  FontStyle bold
+  FontSize 14
+  RoundCorner 16
+}
+skinparam rectangle<<planned>> {
+  BackgroundColor #6E9FC7
+  FontColor white
+  FontStyle italic
+  FontSize 13
+  RoundCorner 16
+}
+skinparam rectangle<<data>> {
+  BackgroundColor #2E6E3E
+  FontColor white
+  FontSize 13
+  RoundCorner 16
+}
+skinparam rectangle<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 13
+  RoundCorner 16
+}
+
+title Arkitektur (container-diagram): SafeRoute
+
+rectangle "**Bruger**" <<person>> as Bruger
+
+package "SafeRoute [systemgrænse]" {
+  rectangle "**Mobile Client**\n[React Native / Expo]\n\nKort, rutevalg,\nindrapportering,\nlokal geofence-evaluering" <<container>> as Mobile
+  rectangle "**Backend API**\n[FastAPI]\n\nREST + WebSocket.\nRuter, zoner, hændelser,\nrapporter, auth, crime index" <<container>> as Backend
+  rectangle "**Async Worker**\n[skala-afhængig, se 4.4]\n\nGenberegner segment-\nscores, henter nyheder\nperiodisk og event-udløst" <<planned>> as Worker
+  rectangle "**Datalag**\n[PostgreSQL + PostGIS]\n\nIncidents, SegmentScores,\nReports, Users" <<data>> as Data
+}
+
+rectangle "**OS-notifikationstjeneste**\n[Expo/Apple/Google]" <<external>> as Push
+rectangle "**OSRM**\n[Rutemotor]" <<external>> as OSRM
+rectangle "**Offentlige datakilder**\n[Danmarks Statistik m.fl.]" <<external>> as OpenData
+rectangle "**Nyhedskilder**\n[RSS/API]" <<external>> as News
+
+' Fastlåst venstre-til-højre rækkefølge, så layoutet ikke krydser sig selv
+Mobile -[hidden]right- Backend
+Backend -[hidden]right- Worker
+Push -[hidden]right- OSRM
+OSRM -[hidden]right- OpenData
+OpenData -[hidden]right- News
+
+Bruger -down-> Mobile : bruger
+
+Mobile <-right-> Backend : REST/WebSocket\n(ruter, zoner, rapporter, scorer)
+
+Backend .right.> Worker : Enqueuer\nopgaver (async)
+
+Backend -down-> Data : Læser/skriver
+Worker -down-> Data : Opdaterer\nsegment-scores
+
+Mobile -down-> Push : Planlægger lokal\nnotifikation
+Backend -up-> OSRM : Forespørger ruter\n(REST)
+Worker -down-> OpenData : Henter periodisk
+Worker -down-> News : Henter periodisk
+
+@enduml

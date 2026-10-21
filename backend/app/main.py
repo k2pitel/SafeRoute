@@ -1,86 +1,59 @@
-"""SafeRoute backend — FastAPI application entrypoint.
+"""SafeRoute backend — composition root.
+
+Wires the server-side subsystems from figur 4.2 together: the Backend API
+(api/), the Async Worker (worker/) and the Datalag (datalag/). Nothing else
+in the code base instantiates subsystems; everything else receives them.
 
 Run locally with:
     uvicorn app.main:app --reload
 """
-import asyncio
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, crime_index, incidents, news, reports, routes, segments, zones
-from app.services import crime_stats, local_store, news_archive
-
-logger = logging.getLogger("saferoute.news_poller")
-
-NEWS_POLL_INTERVAL_SECONDS = 15 * 60  # 15 minutes
-CRIME_STATS_REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours — official stats only change quarterly
+from app import datalag
+from app.api.routers import ALL_ROUTERS
+from app.config import settings
+from app.worker import AsyncWorker
+from app.worker.factory import create_async_worker
 
 
-async def _news_poll_loop():
-    """
-    Background "bot": periodically re-fetches every configured news feed
-    and archives anything new — see news_archive.py for why (RSS has no
-    memory of its own, so this is what lets the app accumulate real
-    history over time instead of only ever seeing the last ~2 days).
-    """
-    while True:
-        try:
-            new_count = await news.poll_and_archive_once()
-            if new_count:
-                logger.info("news poller: archived %d new item(s)", new_count)
-        except Exception:
-            logger.exception("news poller: fetch failed, will retry next interval")
-        await asyncio.sleep(NEWS_POLL_INTERVAL_SECONDS)
+def create_app(async_worker: AsyncWorker | None = None) -> FastAPI:
+    worker = async_worker or create_async_worker(settings.async_worker)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        datalag.init_db()
+        await worker.start()
+        yield
+        await worker.stop()
+
+    app = FastAPI(
+        title="SafeRoute API",
+        description="Safety-aware pedestrian navigation backend.",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    # Set at construction, not in lifespan, so the API can enqueue work even
+    # before the worker starts (queued jobs run once it does).
+    app.state.async_worker = worker
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # tighten before production
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    for router in ALL_ROUTERS:
+        app.include_router(router)
+
+    @app.get("/health", tags=["meta"])
+    def health():
+        return {"status": "ok"}
+
+    return app
 
 
-async def _crime_stats_refresh_loop():
-    """Real municipality-level crime-rate data — see app/crime_stats.py."""
-    while True:
-        try:
-            await crime_stats.refresh_cache()
-        except Exception:
-            logger.exception("crime_stats: refresh failed, will retry next interval")
-        await asyncio.sleep(CRIME_STATS_REFRESH_INTERVAL_SECONDS)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    news_archive.init_db()
-    local_store.init_db()
-    poll_task = asyncio.create_task(_news_poll_loop())
-    stats_task = asyncio.create_task(_crime_stats_refresh_loop())
-    yield
-    poll_task.cancel()
-    stats_task.cancel()
-
-
-app = FastAPI(
-    title="SafeRoute API",
-    description="Safety-aware pedestrian navigation backend.",
-    version="0.1.0",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # tighten before production
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(auth.router)
-app.include_router(incidents.router)
-app.include_router(routes.router)
-app.include_router(reports.router)
-app.include_router(crime_index.router)
-app.include_router(news.router)
-app.include_router(segments.router)
-app.include_router(zones.router)
-
-
-@app.get("/health", tags=["meta"])
-def health():
-    return {"status": "ok"}
+app = create_app()

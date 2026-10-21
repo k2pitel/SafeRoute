@@ -1,0 +1,127 @@
+@startuml SafeRoute_Mobile_Komponenter
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 30
+skinparam ranksep 55
+skinparam ArrowColor #555555
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 11
+skinparam titleFontSize 20
+skinparam packageStyle rectangle
+
+skinparam component {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+  FontSize 12
+}
+skinparam component<<stub>> {
+  BackgroundColor #6E9FC7
+  FontStyle italic
+}
+skinparam rectangle<<external>> {
+  BackgroundColor #8C8C8C
+  FontColor white
+  FontSize 12
+  RoundCorner 16
+}
+
+title Mobile Client: komponentdiagram
+
+package "Mobile Client [React Native / Expo]" {
+  component "App\n(index.js + App.js)" as App
+  component "AppNavigator\n(bottom tabs)" as Nav
+
+  package "features" {
+    package "map (Kort)" {
+      component "MapScreen\n(+ MapScreen.web)" as Map
+      component "useMapData" as MapData
+    }
+    package "routes (UC1)" {
+      component "RoutePanel" as RoutePanel
+      component "PlaceSearchInput" as Search
+      component "ActiveRouteProvider\n(activeRoute)" as Active
+      component "rankRoutes\n(F6-rangering)" as Rank
+    }
+    package "walk (F5 gåtur)" {
+      component "useWalkMonitor\n(geofence under gåtur)" as Walk
+    }
+    package "reports (UC2)" {
+      component "ReportModal" as ReportModal
+    }
+    package "auth" {
+      component "AuthProvider\n(user, login, signup, logout)" as Auth
+      component "AuthPromptModal" as AuthModal
+    }
+    component "NewsScreen" as News
+    component "CrimeIndexScreen" as Crime
+    package "settings (F6)" {
+      component "SettingsScreen" as Settings
+      component "SettingsProvider\n(riskProfile, alerts)" as SettingsCtx
+    }
+  }
+
+  package "ui + theme (designsystem)" {
+    component "Button, ChipGroup,\nBottomSheet, InfoCard" as UI
+  }
+
+  package "services (boundary)" {
+    component "api\n(request, setAuthToken,\nopenZonesFeed)" as Api
+    component "geocoding\n(searchPlaces)" as Geo
+    component "location\n(getCurrentCoordinates)" as Loc
+    component "geofence\n(startGeofenceWatch,\nzonesToGeofences)" as Fence
+  }
+}
+
+rectangle "Backend API\n(REST/WS)" <<external>> as Backend
+rectangle "Nominatim\n(OSM-geokodning)" <<external>> as Nominatim
+rectangle "Telefonens OS\n(lokation, notifikationer,\nSecureStore)" <<external>> as OS
+
+App --> Auth
+App --> Active
+App --> SettingsCtx
+App --> Nav
+Nav --> Map
+Nav --> News
+Nav --> Crime
+Nav --> Settings
+
+Map --> RoutePanel
+Map ..> UI
+ReportModal ..> UI
+AuthModal ..> UI
+Map --> ReportModal
+Map --> AuthModal
+RoutePanel --> Search
+RoutePanel --> Rank
+Rank ..> SettingsCtx : riskProfile
+Map --> Walk
+Walk ..> SettingsCtx : alerts
+Walk --> Fence : zonesToGeofences +\nstartGeofenceWatch
+Walk --> Api : getZones,\nopenZonesFeed
+Settings ..> SettingsCtx : updateSetting
+Search --> Geo
+
+RoutePanel ..> Active : setActiveRoute
+Map ..> Active : læser activeRoute
+Map ..> Auth : user
+AuthModal ..> Auth : login/signup
+
+Auth --> Api : setAuthToken
+Map --> MapData
+MapData --> Api
+RoutePanel --> Api
+News --> Api
+Crime --> Api
+
+Api --> Backend
+Geo --> Nominatim
+Auth --> OS : SecureStore
+SettingsCtx --> OS : SecureStore
+Map --> Loc
+RoutePanel --> Loc
+Loc --> OS : expo-location
+Fence --> OS : watchPosition +\nlokale notifikationer
+@enduml

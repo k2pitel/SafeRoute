@@ -1,0 +1,34 @@
+@startuml SafeRoute_Akt_Ruter
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam titleFontSize 20
+skinparam activity {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam activityDiamondBackgroundColor #DDE7F2
+skinparam activityDiamondFontColor #222222
+
+title Backend API: aktivitetsdiagram for GET /api/routes
+
+start
+:Parse from/to ("lat,lon");
+:Byg OSRM-URL\n/route/v1/foot/{lon1},{lat1};{lon2},{lat2}\noverview=full, geometries=geojson,\nalternatives=true;
+:HTTP GET mod OSRM (timeout 10 s);
+if (HTTP-fejl, timeout\neller ugyldig JSON?) then (ja)
+  :_fallback_routes():\nto lige-linje-forslag\n(NF7);
+  stop
+endif
+if (routes tom?) then (ja)
+  :_fallback_routes();
+  stop
+endif
+:Sortér OSRM-forslag efter duration\n(hurtigst først);
+:Tildel tryghedsscore pr. forslag\n[stand-in: 4,2 / 8,6 / 6,5 ...]\n(mål: opslag i segment_scores);
+:_label_for_score(score)\n<4 not safe, <6 okay,\n<8 safe, ellers very safe;
+:Returnér list[RouteOption]\n(duration_minutes, distance_meters,\nsafety_score, safety_label, geometry);
+stop
+@enduml

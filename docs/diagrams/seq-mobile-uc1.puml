@@ -1,0 +1,52 @@
+@startuml SafeRoute_Seq_Mobile_UC1
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 14
+skinparam titleFontSize 20
+skinparam sequenceArrowFontSize 12
+skinparam sequenceLifeLineBorderColor #7F8C8D
+skinparam participant {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam actor {
+  BackgroundColor #08427B
+  FontColor white
+}
+
+title Mobile Client: UC1 Find og vælg tryg rute (internt forløb)
+
+actor Bruger
+participant "RoutePanel" as Panel
+participant "PlaceSearchInput" as Search
+participant "geocoding" as Geo
+participant "api" as Api
+participant "ActiveRoute-\nContext" as Ctx
+participant "MapScreen" as Map
+
+Bruger -> Panel : trykker på kollapset bjælke
+Panel -> Panel : expanded = true
+Bruger -> Panel : "Min position" (eller søger start)
+Panel -> Panel : expo-location -> origin
+Bruger -> Search : skriver destination
+Search -> Search : debounce 400 ms (min. 2 tegn)
+Search -> Geo : searchPlaces(tekst, near)
+Geo --> Search : op til 6 deduplikerede steder
+Bruger -> Search : vælger sted
+Search -> Panel : onSelect(destination)
+Bruger -> Panel : "Find routes"
+Panel -> Api : getRoutes("lat,lon", "lat,lon")
+Api --> Panel : RouteOption[]
+alt kald fejler
+  Panel -> Panel : routes = [] (log advarsel)
+end
+Panel -> Panel : sortér (sortBy = safety | time)
+Bruger -> Panel : vælger forslag
+Panel -> Ctx : setActiveRoute({origin, destination, option})
+Panel -> Panel : expanded = false
+Ctx --> Map : re-render (activeRoute ændret)
+Map -> Map : GeoJSON [lon,lat] -> {latitude, longitude}
+Map -> Map : Polyline (grøn hvis score >= 6,5, ellers rød)\n+ fitToCoordinates
+@enduml

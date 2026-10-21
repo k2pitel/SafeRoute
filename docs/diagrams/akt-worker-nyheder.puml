@@ -1,0 +1,44 @@
+@startuml SafeRoute_Akt_Worker
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam titleFontSize 20
+skinparam activity {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam activityDiamondBackgroundColor #DDE7F2
+skinparam activityDiamondFontColor #222222
+
+title Async Worker: de to periodiske baggrundsløkker
+
+fork
+  partition "Nyhedspoller (hvert 15. min)" {
+    repeat
+      :pool_live_feeds():\nhent 11 RSS-feeds parallelt\n(asyncio.gather, return_exceptions);
+      note right: Et feed, der fejler,\nspringes over (NF7)
+      :Filtrér: krimi-nøgleord i titel\neller krimi-kategori;
+      :find_location(titel, beskrivelse)\n-> (lat, lon) eller (None, None);
+      :_enrich_unlocated():\nhent artiklens <p>-tekst\nfor uplacerede og prøv igen;
+      :news_archive.save_items()\n(INSERT, dubletter via url-PK afvises);
+      :sleep(15 min);
+    repeat while (backend kører?)
+  }
+fork again
+  partition "Kriminalitetsstatistik (hver 6. time)" {
+    repeat
+      :Hent STRAF11 (vold, seneste 4 kvartaler),\nFOLK1A (befolkning) og\nkommunegrænser (GeoJSON);
+      if (fetch fejler?) then (ja)
+        :behold eksisterende cache;
+      else (nej)
+        :rate pr. 100.000 indbyggere;
+        :score = clamp(5,5 - 1,5 z, 1, 10);
+        :erstat in-memory cache;
+      endif
+      :sleep(6 timer);
+    repeat while (backend kører?)
+  }
+end fork
+@enduml

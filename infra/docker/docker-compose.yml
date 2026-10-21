@@ -1,0 +1,65 @@
+version: "3.9"
+
+# Deployment of the target architecture (figur 4.3): Backend API + Async
+# Worker on the application server, PostgreSQL/PostGIS (+ Redis as the
+# Celery broker) on the database server, OSRM as its own self-hosted
+# container. The Mobile Client runs on the user's phone.
+services:
+  # Datalag
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: saferoute
+      POSTGRES_PASSWORD: saferoute
+      POSTGRES_DB: saferoute
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Broker for the Celery Async Worker
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # Rutemotor, self-hosted (NF6/NF7) — build the graph first: infra/osrm/README.md
+  osrm:
+    image: osrm/osrm-backend
+    command: osrm-routed --algorithm mld /data/map.osrm
+    volumes:
+      - ./osrm-data:/data
+    ports:
+      - "5000:5000"
+
+  # Backend API. Uses the Celery Async Worker realisation, so periodic jobs
+  # run only in `worker`, and talks to the self-hosted OSRM.
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+    env_file:
+      - ../backend/.env
+    environment:
+      ASYNC_WORKER: celery
+      OSRM_SERVER_URL: http://osrm:5000
+    depends_on:
+      - postgres
+      - redis
+      - osrm
+    ports:
+      - "8000:8000"
+
+  # Async Worker, target architecture: Celery worker + Beat
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/worker.Dockerfile
+    env_file:
+      - ../backend/.env
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:

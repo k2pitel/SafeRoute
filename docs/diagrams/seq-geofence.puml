@@ -1,0 +1,53 @@
+@startuml SafeRoute_Seq_Geofence
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 14
+skinparam titleFontSize 20
+skinparam sequenceArrowFontSize 12
+skinparam sequenceLifeLineBorderColor #7F8C8D
+skinparam participant {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam actor {
+  BackgroundColor #08427B
+  FontColor white
+}
+
+title Systemsekvensdiagram: Geofence som condition for push-notifikation (jf. F5, NF3)
+
+actor Bruger
+participant "Mobile Client\n(geofence.js)" as Mobile
+participant "Backend API" as Backend
+participant "OS-notifikations-\ntjeneste" as OS
+
+Bruger -> Mobile : trykker "start gåtur"
+Mobile -> Backend : GET /api/zones?bbox=...\n(+ abonnerer /ws/zones)
+activate Backend
+Backend --> Mobile : rødzone-polygoner\n(safety_score, geometry)
+deactivate Backend
+Mobile -> Mobile : cacher polygoner lokalt
+
+loop hver 15. sek. eller 25 m bevægelse (NF3)
+  Mobile -> Mobile : Location.watchPositionAsync\n→ ny position
+  Mobile -> Mobile : condition 1: point-in-polygon\n(er position i en rødzone?)
+  Mobile -> Mobile : condition 2: er klokken 00-05\n(historisk mere utrygt tidsrum)
+
+  alt condition opfyldt (zone-indtræden eller ny "sen nat"-time)
+    Mobile -> OS : scheduleNotificationAsync\n(lokal, trigger: null)
+    OS -> Bruger : viser notifikation\n("Du er i et utrygt område" /\n"Vær ekstra opmærksom nu")
+  else condition ikke opfyldt
+    Mobile -> Mobile : ingen notifikation
+  end
+end
+
+note over Mobile
+  Begge conditions evalueres på telefonen
+  ud fra allerede hentede data, ingen
+  live positions-stream til Backend.
+  Se risikoanalysen i afsnit 4.3.
+end note
+
+@enduml

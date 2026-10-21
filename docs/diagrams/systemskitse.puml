@@ -1,0 +1,84 @@
+@startuml SafeRoute_Systemskitse
+scale 1.5
+skinparam handwritten true
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam roundCorner 25
+skinparam defaultTextAlignment center
+skinparam nodesep 45
+skinparam ranksep 55
+skinparam ArrowColor #444444
+skinparam ArrowFontColor #444444
+skinparam ArrowFontSize 15
+skinparam NoteBackgroundColor #FFF9C4
+skinparam NoteBorderColor #E0C200
+skinparam NoteFontSize 14
+skinparam componentStyle rectangle
+skinparam padding 8
+skinparam defaultFontSize 17
+skinparam titleFontSize 22
+
+skinparam actor {
+  FontSize 16
+  BackgroundColor #FDE9C8
+  BorderColor #B5651D
+}
+skinparam cloud {
+  FontSize 15
+  BackgroundColor #DCEEFB
+  BorderColor #3A7CA5
+}
+skinparam component {
+  FontSize 16
+  FontStyle bold
+  BackgroundColor #E4F5E0
+  BorderColor #4C8C4A
+}
+skinparam rectangle {
+  FontSize 16
+  FontStyle bold
+  BackgroundColor #F3E5F5
+  BorderColor #8E44AD
+}
+
+title SafeRoute, rigt billede af systemet
+
+actor "Fodgænger\npå vej hjem" as Bruger
+actor "Andre brugere\ni nærheden" as AndreBrugere
+
+cloud "Offentlige data\n(gadebelysning,\nhistorisk kriminalitet)" as Offentlig
+cloud "Live-rapporter\n\"her føles det utrygt lige nu\"" as Rapporter
+
+rectangle "SafeRoute\n(på brugerens telefon)" as App {
+  component "Ruteforslag\n+ tryghedsscore" as Rutemotor
+  component "\"Hvorfor?\"\n– kort forklaring" as Forklaring
+  component "Følg-med\ngeofence + tidspunkt" as FoelgeMed
+  component "Bytryghedsoversigt\n(for turister m.fl.)" as ByOversigt
+}
+
+Bruger -[#B5651D]-> Rutemotor : "jeg skal hjem,\nhvilken vej?"
+Offentlig ..> Rutemotor : fodrer
+Rapporter ..> Rutemotor : fodrer
+AndreBrugere -[#3A7CA5]-> Rapporter : indberetter og\nbekræfter hændelser
+
+Rutemotor -[#4C8C4A]-> Forklaring
+Rutemotor -[#4C8C4A]-> ByOversigt
+
+Forklaring -down-> Bruger : "30 min, utryg" vs.\n"34 min, meget tryg"\n+ hvorfor
+ByOversigt -down-> Bruger : hurtigt overblik\nover en ny by
+Bruger -[#B5651D]-> FoelgeMed : trykker "start gåtur"
+FoelgeMed -[dashed,#B5651D]-> Bruger : advarsel undervejs\n(zone eller sen nattetime)
+
+note top of Rutemotor
+  Én tryghedsscore, sat
+  sammen af flere kilder,
+  ikke kun den hurtigste vej
+end note
+
+note bottom of AndreBrugere
+  Rapporter er verificerede
+  af folk der er der lige nu,
+  ikke gamle statistikker
+end note
+
+@enduml

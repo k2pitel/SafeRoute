@@ -1,0 +1,55 @@
+@startuml SafeRoute_Seq_UC1
+scale 1.3
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 14
+skinparam titleFontSize 20
+skinparam sequenceArrowFontSize 12
+skinparam sequenceLifeLineBorderColor #7F8C8D
+skinparam participant {
+  BackgroundColor #1168BD
+  FontColor white
+  BorderColor #0B4C8C
+}
+skinparam actor {
+  BackgroundColor #08427B
+  FontColor white
+}
+
+title Systemsekvensdiagram: UC1: Find og vælg tryg rute
+
+actor Bruger
+participant "Mobile Client" as Mobile
+participant "Backend API" as Backend
+participant "OSRM" as OSRM
+database "Datalag\n(segment_scores)" as DB
+
+Bruger -> Mobile : angiver start + destination
+Mobile -> Backend : GET /api/routes?from=&to=&mode=walking
+activate Backend
+
+Backend -> OSRM : GET /route/v1/foot/{lon1,lat1;lon2,lat2}\n(alternatives=true)
+activate OSRM
+OSRM --> Backend : rutealternativer\n(geometri, varighed)
+deactivate OSRM
+
+Backend -> DB : slå segment-scorer op\nfor rutegeometrierne
+activate DB
+DB --> Backend : trygsedsscore pr. segment
+deactivate DB
+
+Backend -> Backend : aggreger score pr. rute\n+ vælg forklaring (SHAP)
+Backend --> Mobile : 200 OK\n[RouteOption] (tid, score, label, geometri)
+deactivate Backend
+
+Mobile -> Bruger : viser ruteforslag\nsorteret på tid/tryghed
+Bruger -> Mobile : vælger ét forslag
+Mobile -> Mobile : tegner rute på kort
+
+note over Backend, DB
+  Er OSRM utilgængelig, falder Backend
+  tilbage til en lokal ruteberegning (NF7)
+  i stedet for at fejle helt.
+end note
+
+@enduml
