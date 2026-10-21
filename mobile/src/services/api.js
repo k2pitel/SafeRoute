@@ -13,7 +13,17 @@ async function request(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...options.headers };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch {
+    // The server never answered (dead tunnel, wrong LAN IP, backend not
+    // running). Say so, instead of letting callers report it as e.g.
+    // "no route found". `offline` lets them tell the two cases apart.
+    const error = new Error(`Can't reach the SafeRoute server at ${API_BASE_URL}`);
+    error.offline = true;
+    throw error;
+  }
   if (!res.ok) {
     // Prefer FastAPI's {"detail": ...} message over a generic status-code
     // error where available. `detail` is usually a plain string (e.g.

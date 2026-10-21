@@ -69,9 +69,10 @@ export default function RoutePanel() {
       setRoutes(results);
       if (results.length === 0) setError(NO_ROUTE_MESSAGE);
     } catch (e) {
-      // UC1 extension 4a: tell the user and let them adjust start/destination.
+      // UC1 extension 4a: tell the user and let them adjust start/destination,
+      // unless the server itself is unreachable: adjusting won't help then.
       setRoutes([]);
-      setError(`${NO_ROUTE_MESSAGE} (${e.message})`);
+      setError(e.offline ? e.message : `${NO_ROUTE_MESSAGE} (${e.message})`);
     } finally {
       setLoading(false);
     }

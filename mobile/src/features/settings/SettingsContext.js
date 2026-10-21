@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   zoneAlerts: true, // F5: alert on entering an unsafe zone
   timeAlerts: true, // F5: alert at hours when unsafety historically rises
   shareLocationWithContacts: false,
+  showReports: true, // community report pins on the map (toggle on MapScreen)
 };
 
 const SettingsContext = createContext(null);

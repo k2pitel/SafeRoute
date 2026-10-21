@@ -11,6 +11,7 @@ import AuthPromptModal from "../auth/AuthPromptModal";
 import ReportModal from "../reports/ReportModal";
 import { useActiveRoute } from "../routes/ActiveRouteContext";
 import RoutePanel from "../routes/RoutePanel";
+import { useSettings } from "../settings/SettingsContext";
 import { useWalkMonitor } from "../walk/useWalkMonitor";
 import { jitterCoordinate } from "./jitterCoordinate";
 import MapLegend from "./MapLegend";
@@ -36,8 +37,16 @@ export default function MapScreen() {
   const afterLogin = useRef(null); // what to continue with once AuthPromptModal succeeds
   const { activeRoute } = useActiveRoute();
   const { user } = useAuth();
+  const { settings, updateSetting } = useSettings();
   const { incidents, reports, zones, newsPins, addReport, replaceReport } = useMapData(region);
+  const visibleReports = settings.showReports ? reports : [];
   useWalkMonitor(activeRoute);
+
+  // Hide/show community report pins; remembered across restarts (SettingsContext).
+  const toggleReports = () => {
+    if (settings.showReports && selected?.kind === "report") setSelected(null);
+    updateSetting("showReports", !settings.showReports);
+  };
 
   // Login-gated actions (UC2 extension 3a): run now if signed in, otherwise
   // after a successful login — never if the user cancels.
@@ -114,7 +123,7 @@ export default function MapScreen() {
     zones.some((z) => z.label === "unsafe") && { color: colors.zone.unsafe.stroke, label: "Unsafe area" },
     zones.some((z) => z.label === "mixed") && { color: colors.zone.mixed.stroke, label: "Mixed area" },
     newsPins.length > 0 && { color: colors.marker.news, label: "Crime news" },
-    reports.length > 0 && { color: colors.marker.report, label: "Community report" },
+    visibleReports.length > 0 && { color: colors.marker.report, label: "Community report" },
   ].filter(Boolean);
 
   return (
@@ -151,7 +160,7 @@ export default function MapScreen() {
             />
           ))}
 
-          {reports.map((report) => (
+          {visibleReports.map((report) => (
             <Marker
               key={`report-${report.id}`}
               coordinate={{ latitude: report.latitude, longitude: report.longitude }}
@@ -177,6 +186,15 @@ export default function MapScreen() {
 
         <TouchableOpacity style={[styles.fab, styles.reportFab]} onPress={handleReportPress}>
           <Ionicons name="warning" size={22} color={colors.onPrimary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.fab, styles.reportsToggleFab]}
+          onPress={toggleReports}
+          accessibilityRole="button"
+          accessibilityLabel={settings.showReports ? "Hide community reports" : "Show community reports"}
+        >
+          <Ionicons name={settings.showReports ? "eye" : "eye-off"} size={22} color={colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.fab, styles.locateFab]} onPress={goToMyLocation}>
@@ -226,4 +244,5 @@ const styles = StyleSheet.create({
   fab: { position: "absolute", right: spacing.lg, borderRadius: radius.fab, ...elevation },
   locateFab: { bottom: 100, backgroundColor: colors.surface, padding: 10 },
   reportFab: { bottom: 160, backgroundColor: colors.danger, padding: spacing.md },
+  reportsToggleFab: { bottom: 220, backgroundColor: colors.surface, padding: 10 },
 });
