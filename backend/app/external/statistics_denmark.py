@@ -99,3 +99,57 @@ async def fetch_municipality_boundaries(client: httpx.AsyncClient) -> dict[str, 
         name = normalize_name(feature["properties"]["KOMNAVN"])
         boundaries.setdefault(name, []).append(feature["geometry"])
     return boundaries
+
+
+# --- Date ranges (period filter on the Crime Index screen) -------------------
+
+async def available_quarters(client: httpx.AsyncClient, table: str) -> list[str]:
+    """Every quarter the table has, oldest first, e.g. ["2007K1", ..., "2026K3"]."""
+    resp = await client.get(STATBANK_TABLEINFO_URL.format(table=table))
+    resp.raise_for_status()
+    time_var = next(v for v in resp.json()["variables"] if v["id"] == "Tid")
+    return [v["id"] for v in time_var["values"]]
+
+
+async def fetch_violent_crime_for_quarters(client: httpx.AsyncClient, quarters: list[str]) -> dict[str, float]:
+    """STRAF11 code 12 summed over the given quarters, per area."""
+    rows = await _fetch_csv(
+        client,
+        "STRAF11",
+        [
+            {"code": "OMRÅDE", "values": ["*"]},
+            {"code": "OVERTRÆD", "values": [VIOLENT_CRIME_CODE]},
+            {"code": "Tid", "values": quarters},
+        ],
+    )
+    totals: dict[str, float] = {}
+    for row in rows:
+        try:
+            value = float(row["INDHOLD"])
+        except ValueError:
+            continue
+        name = normalize_name(row["OMRÅDE"])
+        totals[name] = totals.get(name, 0) + value
+    return totals
+
+
+async def fetch_population_for_quarter(client: httpx.AsyncClient, quarter: str) -> dict[str, int]:
+    """FOLK1A total population per area in one quarter."""
+    rows = await _fetch_csv(
+        client,
+        "FOLK1A",
+        [
+            {"code": "OMRÅDE", "values": ["*"]},
+            {"code": "KØN", "values": ["TOT"]},
+            {"code": "ALDER", "values": ["IALT"]},
+            {"code": "CIVILSTAND", "values": ["TOT"]},
+            {"code": "Tid", "values": [quarter]},
+        ],
+    )
+    populations: dict[str, int] = {}
+    for row in rows:
+        try:
+            populations[normalize_name(row["OMRÅDE"])] = int(float(row["INDHOLD"]))
+        except ValueError:
+            continue
+    return populations

@@ -126,3 +126,33 @@ def set_locations(updates: list[tuple[float | None, float | None, str]]) -> None
     """Bulk update of (latitude, longitude, url)."""
     with _connect() as conn:
         conn.executemany("UPDATE news_items SET latitude = ?, longitude = ? WHERE url = ?", updates)
+
+
+def load_range(from_year: int, to_year: int, located_only: bool = False, limit: int = 5000) -> list[NewsItem]:
+    """Archived items published from 1 Jan ``from_year`` to 31 Dec ``to_year``,
+    newest first. ``located_only`` keeps only items placed on the map."""
+    query = "SELECT * FROM news_items WHERE published_at >= ? AND published_at < ?"
+    if located_only:
+        query += " AND latitude IS NOT NULL"
+    query += " ORDER BY published_at DESC LIMIT ?"
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(query, (f"{from_year}-01-01", f"{to_year + 1}-01-01", limit)).fetchall()
+    return [
+        NewsItem(
+            title=row["title"],
+            url=row["url"],
+            source=row["source"],
+            published_at=datetime.fromisoformat(row["published_at"]),
+            latitude=row["latitude"],
+            longitude=row["longitude"],
+        )
+        for row in rows
+    ]
+
+
+def year_span() -> tuple[int, int] | None:
+    """(first year, last year) present in the archive."""
+    with _connect() as conn:
+        lo, hi = conn.execute("SELECT MIN(published_at), MAX(published_at) FROM news_items").fetchone()
+    return (int(lo[:4]), int(hi[:4])) if lo and hi else None

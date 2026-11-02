@@ -63,6 +63,7 @@ def build(homicides: dict[str, dict], crime_in_area: dict[str, dict], cities: di
             "region": h["region"],
             "homicides_per_100k": h["homicides_per_100k"],
             "homicides_year": h["year"],
+            "series": h["series"],  # {year: homicides per 100k}, for the period filter
             "crime_in_area_percent": None,
             "crime_in_area_year": None,
         }
@@ -135,11 +136,37 @@ async def refresh_cache() -> int:
 
 # --- Read side (Backend API) ------------------------------------------------
 
-def country_ranking() -> list[dict]:
-    """All countries, most crime first (rank 1 = highest crime index)."""
+def _year_label(years: list[int]) -> str:
+    return str(years[0]) if years[0] == years[-1] else f"{years[0]}–{years[-1]}"
+
+
+def country_ranking(from_year: int | None = None, to_year: int | None = None) -> list[dict]:
+    """All countries, most crime first (rank 1 = highest crime index). With a
+    year range, each country's homicide rate is its average over the years in
+    the range that have data; countries with none in the range are left out."""
     data = world_safety_cache.get()
-    ranked = sorted(data.countries.values(), key=lambda c: c["crime_index"], reverse=True)
+    if from_year is None and to_year is None:
+        rows = list(data.countries.values())
+    else:
+        lo, hi = from_year or to_year, to_year or from_year
+        averaged: dict[str, dict] = {}
+        for iso2, c in data.countries.items():
+            years = sorted(int(y) for y in c.get("series", {}) if lo <= int(y) <= hi)
+            if not years:
+                continue
+            mean = sum(c["series"][str(y)] for y in years) / len(years)
+            averaged[iso2] = {**c, "homicides_per_100k": round(mean, 2), "homicides_year": _year_label(years)}
+        pct = _percentiles({k: c["homicides_per_100k"] for k, c in averaged.items()})
+        rows = [
+            {**c, "crime_index": pct[k], "safety_index": round(100 - pct[k], 1)} for k, c in averaged.items()
+        ]
+    ranked = sorted(rows, key=lambda c: c["crime_index"], reverse=True)
     return [{**c, "rank": i} for i, c in enumerate(ranked, start=1)]
+
+
+def available_years() -> tuple[int, int] | None:
+    years = [int(y) for c in world_safety_cache.get().countries.values() for y in c.get("series", {})]
+    return (min(years), max(years)) if years else None
 
 
 def city_ranking() -> list[dict]:
@@ -148,7 +175,7 @@ def city_ranking() -> list[dict]:
 
 
 def country(iso2: str) -> dict | None:
-    for c in country_ranking():
+    for c in country_ranking(None, None):
         if c["iso2"] == iso2:
             return c
     return None

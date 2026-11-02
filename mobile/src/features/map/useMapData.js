@@ -25,13 +25,14 @@ export function regionToBbox(region) {
 
 /**
  * Everything the map shows, fetched via services/api:
- *  - news pins: nationwide, fetched once for all archived years,
+ *  - news pins: nationwide, for the chosen year range (`newsPeriod`,
+ *    { from, to }); refetched when the range changes,
  *  - incidents, community reports and colour-coded zones (F7): for the
  *    visible region, refetched (debounced) whenever the map stops moving
  *    (US-56); reports also every 2 min while the app is in front (NF4).
  * Failures leave the list empty rather than breaking the map (NF7).
  */
-export function useMapData(region) {
+export function useMapData(region, newsPeriod) {
   const [incidents, setIncidents] = useState([]);
   const [reports, setReports] = useState([]);
   const [zones, setZones] = useState([]);
@@ -39,11 +40,16 @@ export function useMapData(region) {
   const bboxRef = useRef(regionToBbox(region));
 
   useEffect(() => {
+    if (!newsPeriod) return;
+    let cancelled = false;
     api
-      .getNewsAllYears()
-      .then((items) => setNewsPins(items.filter((item) => item.latitude != null)))
-      .catch(() => setNewsPins([]));
-  }, []);
+      .getNewsPins(newsPeriod)
+      .then((items) => !cancelled && setNewsPins(items.filter((item) => item.latitude != null)))
+      .catch(() => !cancelled && setNewsPins([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [newsPeriod?.from, newsPeriod?.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadReports = useCallback(() => {
     api.getReports(bboxRef.current).then(setReports).catch(() => {}); // keep the last list on a failed refresh

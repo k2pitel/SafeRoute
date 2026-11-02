@@ -7,6 +7,7 @@ import { radius, spacing, useTheme, useThemedStyles } from "../../theme";
 import { StateView } from "../../ui";
 import { CountryRanking, EuropeanCityRanking } from "./RankingViews";
 
+
 // F4 (US-29): city safety overview from real data — the municipality's
 // official violent-crime rate (Danmarks Statistik), its national rank and
 // recent community reports and news. Picker limited to covered cities.
@@ -49,7 +50,6 @@ function CityView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [focused, setFocused] = useState(false);
-
   const load = (cityName) => {
     setQuery(cityName);
     setFocused(false);
@@ -116,7 +116,11 @@ function CityView() {
         ))}
       </ScrollView>
 
-      {loading && <ActivityIndicator style={styles.spinner} color={colors.primary} />}
+      {loading && (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      )}
 
       {!loading && error && (
         <StateView
@@ -136,6 +140,9 @@ function CityView() {
             {data.municipality.toLowerCase() !== data.city.toLowerCase() ? (
               <Text style={styles.cityMuni}>  ·  {data.municipality} Municipality</Text>
             ) : null}
+          </Text>
+          <Text style={styles.periodLine}>
+            {data.from_year ? `Period ${data.data_period}` : `Latest 12 months (${data.data_period})`}
           </Text>
 
           <View style={styles.scoreRow}>
@@ -184,8 +191,16 @@ function CityView() {
               value={`${data.rank} of ${data.municipalities_ranked}`}
             />
             <Fact icon="people-outline" label="Population" value={data.population.toLocaleString()} />
-            <Fact icon="alert-circle-outline" label="Community reports, 30 days" value={String(data.recent_reports_30d)} />
-            <Fact icon="newspaper-outline" label="Crime news, 90 days" value={String(data.recent_news_90d)} />
+            <Fact
+              icon="alert-circle-outline"
+              label={data.from_year ? `Community reports, ${data.data_period}` : "Community reports, 30 days"}
+              value={String(data.recent_reports_30d)}
+            />
+            <Fact
+              icon="newspaper-outline"
+              label={data.from_year ? `Crime news, ${data.data_period}` : "Crime news, 90 days"}
+              value={String(data.recent_news_90d)}
+            />
           </View>
 
           {data.perception ? (
@@ -319,6 +334,9 @@ const makeStyles = ({ colors, card, inputStyle, typography, elevation }) =>
     stack: { flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden", marginVertical: 8 },
     stackPart: { height: 10 },
     explain: { color: colors.textSubtle, fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
+    loadingBox: { alignItems: "center", gap: spacing.sm, marginTop: spacing.xxl },
+    loadingText: { color: colors.textSubtle, fontSize: 13 },
+    periodLine: { color: colors.textSubtle, fontSize: 13, marginTop: -spacing.sm, marginBottom: spacing.md },
     noSurvey: { color: colors.textSubtle, fontSize: 12, marginBottom: spacing.md, fontStyle: "italic" },
     countryTitle: { marginTop: spacing.md, marginBottom: 0 },
 

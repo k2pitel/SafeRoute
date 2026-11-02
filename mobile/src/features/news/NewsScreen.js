@@ -14,13 +14,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "../../services/api";
 import { radius, spacing, useTheme, useThemedStyles } from "../../theme";
-import { StateView } from "../../ui";
+import { PeriodPicker, StateView } from "../../ui";
 
 // F9: crime-related news, nationwide by default, optionally filtered to a city.
 // "Latest" pulls live feeds + recently-archived items; picking a year
 // switches to browsing the historical archive instead (see
 // backend/app/api/news/backfill.py for how 2020+ got in there).
-const YEARS = ["Latest", 2026, 2025, 2024, 2023, 2022, 2021, 2020];
+const periodLabel = (p) => (p ? (p.from === p.to ? String(p.from) : `${p.from}–${p.to}`) : "latest");
 
 function timeAgo(iso) {
   const then = new Date(iso);
@@ -67,21 +67,22 @@ export default function NewsScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [city, setCity] = useState(""); // empty = all of Denmark
-  const [year, setYear] = useState("Latest");
+  const [period, setPeriod] = useState(null); // null = latest (live feeds + newest archive)
+  const [years, setYears] = useState(null); // { min_year, max_year } of the archive
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const requestId = useRef(0);
 
-  const load = useCallback((cityFilter, yearFilter, { pull = false } = {}) => {
+  const load = useCallback((cityFilter, periodFilter, { pull = false } = {}) => {
     // Only the newest request may update the screen: switching year while a
     // slow "Latest" fetch is in flight must not let the old answer win.
     const id = ++requestId.current;
     pull ? setRefreshing(true) : setLoading(true);
     setError(null);
     api
-      .getNews(cityFilter || undefined, yearFilter === "Latest" ? undefined : yearFilter)
+      .getNews(cityFilter || undefined, undefined, periodFilter)
       .then((items) => id === requestId.current && setNews(items))
       .catch((e) => {
         if (id !== requestId.current) return;
@@ -95,18 +96,21 @@ export default function NewsScreen() {
       });
   }, []);
 
-  useEffect(() => load(city, year), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load(city, period);
+    api.getNewsYears().then((y) => y.min_year && setYears(y)).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectYear = (y) => {
-    setYear(y);
-    load(city, y);
+  const selectPeriod = (p) => {
+    setPeriod(p);
+    load(city, p);
   };
 
   const header = (
     <View>
       <Text style={styles.heading}>Crime news</Text>
       <Text style={styles.subheading}>
-        {city ? `Filtered to ${city}` : "All of Denmark"} · {year === "Latest" ? "latest" : year}
+        {city ? `Filtered to ${city}` : "All of Denmark"} · {periodLabel(period)}
       </Text>
 
       <View style={styles.searchBox}>
@@ -115,31 +119,21 @@ export default function NewsScreen() {
           style={styles.searchInput}
           value={city}
           onChangeText={setCity}
-          onSubmitEditing={() => load(city, year)}
+          onSubmitEditing={() => load(city, period)}
           placeholder="Filter by city, e.g. Aarhus"
           placeholderTextColor={colors.textFaint}
           returnKeyType="search"
         />
         {city ? (
-          <TouchableOpacity onPress={() => { setCity(""); load("", year); }} hitSlop={10}>
+          <TouchableOpacity onPress={() => { setCity(""); load("", period); }} hitSlop={10}>
             <Ionicons name="close-circle" size={18} color={colors.textFaint} />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={YEARS}
-        keyExtractor={(y) => String(y)}
-        style={styles.yearRow}
-        contentContainerStyle={styles.yearRowContent}
-        renderItem={({ item: y }) => (
-          <TouchableOpacity style={[styles.yearChip, y === year && styles.yearChipActive]} onPress={() => selectYear(y)}>
-            <Text style={[styles.yearChipText, y === year && styles.yearChipTextActive]}>{y}</Text>
-          </TouchableOpacity>
-        )}
-      />
+      <View style={styles.yearRow}>
+        <PeriodPicker value={period} range={years} onChange={selectPeriod} defaultLabel="Latest" />
+      </View>
       {!loading && !error && news.length > 0 ? (
         <Text style={styles.count}>{news.length} articles</Text>
       ) : null}
@@ -159,7 +153,7 @@ export default function NewsScreen() {
           ? "The SafeRoute backend or its tunnel isn't answering. Check that start.cmd is still running, then try again."
           : error.message}
         actionLabel="Try again"
-        onAction={() => load(city, year)}
+        onAction={() => load(city, period)}
       />
     );
   } else {
@@ -167,7 +161,7 @@ export default function NewsScreen() {
       <StateView
         icon="newspaper-outline"
         title="No crime news"
-        message={`Nothing found${city ? ` for ${city}` : ""}${year !== "Latest" ? ` in ${year}` : ""}.`}
+        message={`Nothing found${city ? ` for ${city}` : ""}${period ? ` in ${periodLabel(period)}` : ""}.`}
       />
     );
   }
@@ -185,7 +179,7 @@ export default function NewsScreen() {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => load(city, year, { pull: true })}
+          onRefresh={() => load(city, period, { pull: true })}
           tintColor={colors.primary}
           colors={[colors.primary]}
         />
@@ -205,8 +199,7 @@ const makeStyles = ({ colors, card, inputStyle, typography }) =>
     searchIcon: { marginRight: spacing.sm },
     searchInput: { flex: 1, paddingVertical: 11, fontSize: 15, color: colors.text },
 
-    yearRow: { flexGrow: 0, marginHorizontal: -spacing.lg, marginBottom: spacing.md },
-    yearRowContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+    yearRow: { marginBottom: spacing.md },
     yearChip: {
       paddingVertical: 7,
       paddingHorizontal: 16,

@@ -4,12 +4,15 @@
 one crime measure comparable across every country — the free hard-number
 half of a country crime ranking (Germany and the US included, US-51/52).
 """
+from datetime import UTC, datetime
+
 import httpx
 
 COUNTRIES_URL = "https://api.worldbank.org/v2/country"
 INDICATOR_URL = "https://api.worldbank.org/v2/country/all/indicator/VC.IHR.PSRC.P5"
 TIMEOUT_SECONDS = 60
 FETCH_ERRORS = (httpx.HTTPError, KeyError, ValueError, TypeError, IndexError)
+FIRST_YEAR = 2000  # how far back the period filter can go
 
 
 async def _pages(client: httpx.AsyncClient, url: str, params: dict) -> list[dict]:
@@ -25,26 +28,32 @@ async def _pages(client: httpx.AsyncClient, url: str, params: dict) -> list[dict
 
 
 async def fetch_homicide_rates(client: httpx.AsyncClient) -> dict[str, dict]:
-    """Per ISO2 country code: name, iso3, year and homicides per 100,000 —
-    the most recent non-empty value. Regional aggregates are dropped."""
+    """Per ISO2 country code: name, iso3, the most recent year and value, and
+    the whole series since FIRST_YEAR (for date ranges). Regional
+    aggregates are dropped."""
     countries = {
         c["id"]: c
         for c in await _pages(client, COUNTRIES_URL, {})
         if c.get("region", {}).get("id") not in (None, "NA")  # "NA" = aggregate (World, EU, ...)
     }
-    rows = await _pages(client, INDICATOR_URL, {"mrnev": 1})
+    rows = await _pages(client, INDICATOR_URL, {"date": f"{FIRST_YEAR}:{datetime.now(UTC).year}"})
     rates: dict[str, dict] = {}
     for row in rows:
         iso3 = row.get("countryiso3code")
         if iso3 not in countries or row.get("value") is None:
             continue
         country = countries[iso3]
-        rates[country["iso2Code"]] = {
+        entry = rates.setdefault(country["iso2Code"], {
             "iso2": country["iso2Code"],
             "iso3": iso3,
             "name": country["name"],
             "region": country["region"]["value"].strip(),
             "year": row["date"],
             "homicides_per_100k": round(float(row["value"]), 2),
-        }
+            "series": {},
+        })
+        entry["series"][row["date"]] = round(float(row["value"]), 3)
+        if row["date"] > entry["year"]:
+            entry["year"] = row["date"]
+            entry["homicides_per_100k"] = round(float(row["value"]), 2)
     return rates

@@ -27,15 +27,15 @@ function tintFor(levelColors, crimeIndex) {
   return levelColors(crimeIndex >= 60 ? "High" : crimeIndex >= 40 ? "Moderate" : "Low");
 }
 
-function useRanking(loader) {
+function useRanking(loader, arg) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   const load = () => {
     setRows(null);
     setError(null);
-    loader().then(setRows).catch(setError);
+    loader(arg).then(setRows).catch(setError);
   };
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, [arg]); // eslint-disable-line react-hooks/exhaustive-deps
   return { rows, error, reload: load };
 }
 
@@ -122,7 +122,7 @@ export function CountryRanking() {
     </View>
   );
 
-  if (!state.rows) return <Loading {...state} />;
+  if (state.error) return <Loading {...state} />;
 
   return (
     <FlatList
@@ -156,7 +156,7 @@ export function CountryRanking() {
           Sources: World Bank (UNODC homicides, CC BY 4.0); Eurostat EU-SILC ilc_mddw03. Rank 1 = most crime.
         </Text>
       }
-      ListEmptyComponent={<Text style={[styles.sub, { textAlign: "center", color: colors.textFaint }]}>No match.</Text>}
+      ListEmptyComponent={state.rows ? <Text style={[styles.sub, { textAlign: "center", color: colors.textFaint }]}>No match.</Text> : <Loading {...state} />}
     />
   );
 }

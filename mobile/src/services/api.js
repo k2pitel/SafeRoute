@@ -90,40 +90,24 @@ export const api = {
   login: (email, password) =>
     request("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   getCrimeIndex: (city) => request(`/api/crime-index?city=${encodeURIComponent(city)}`),
-  getNews: (city, year) => {
+  // period: { from, to } years → that range from the archive; otherwise
+  // latest (live feeds + newest archive), or one `year`.
+  getNews: (city, year, period) => {
     const params = new URLSearchParams();
     if (city) params.set("city", city);
-    if (year) params.set("year", String(year));
+    if (period) {
+      params.set("from", String(period.from));
+      params.set("to", String(period.to));
+    } else if (year) {
+      params.set("year", String(year));
+    }
     const qs = params.toString();
     return request(`/api/news${qs ? `?${qs}` : ""}`);
   },
-  // Latest-only (no `year`) merges live feeds with just the most-recently
-  // archived items, so with years of archive built up it's almost entirely
-  // this year's news — see backend/app/api/news/service.py's get_news docstring.
-  // Map pins should reflect the whole archive, so this pulls every year on
-  // top of "latest" and merges, deduping by URL.
-  getNewsAllYears: async (startYear = 2020) => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let y = startYear; y <= currentYear; y++) years.push(y);
-
-    const batches = await Promise.all([
-      api.getNews(),
-      ...years.map((y) => api.getNews(undefined, y).catch(() => [])),
-    ]);
-
-    const seen = new Set();
-    const merged = [];
-    for (const batch of batches) {
-      for (const item of batch) {
-        const key = item.url || item.title;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        merged.push(item);
-      }
-    }
-    return merged;
-  },
+  // Map pins: only articles placed on the map, for a year range (one request,
+  // instead of one per year as before).
+  getNewsPins: (period) => request(`/api/news?from=${period.from}&to=${period.to}&located=true`),
+  getNewsYears: () => request("/api/news/years"),
   explainSegment: (segmentId) => request(`/api/segments/${segmentId}/explain`),
 };
 

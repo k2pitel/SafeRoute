@@ -23,7 +23,9 @@ class CrimeIndexOut(BaseModel):
     recent_reports_30d: int
     recent_news_90d: int
     summary: str
-    data_period: str | None  # e.g. "2025K3-2026K2"
+    data_period: str | None  # e.g. "2025K3-2026K2", or the chosen range "2024–2025"
+    from_year: int | None = None  # set when a period filter was used
+    to_year: int | None = None
     last_updated: datetime | None  # when the statistics were fetched
     # Free stand-ins for paid crime-index data (Eurostat, World Bank):
     perception: "CitySafetyOut | None" = None  # survey: feeling safe at night, if the city was surveyed
@@ -80,6 +82,17 @@ class WorldSafetySources(BaseModel):
     homicides: str
     crime_in_area: str
     night_safety: str
+
+
+
+class YearRange(BaseModel):
+    min_year: int
+    max_year: int
+
+
+class AvailablePeriods(BaseModel):
+    denmark: YearRange
+    countries: YearRange | None
 
 
 CrimeIndexOut.model_rebuild()

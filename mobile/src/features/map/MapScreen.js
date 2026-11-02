@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../services/api";
 import { getCurrentCoordinates } from "../../services/location";
 import { radius, spacing, useTheme, useThemedStyles } from "../../theme";
+import { BottomSheet, PeriodPicker, TextButton } from "../../ui";
 import { useAuth } from "../auth/AuthContext";
 import AuthPromptModal from "../auth/AuthPromptModal";
 import ReportModal from "../reports/ReportModal";
@@ -44,7 +45,22 @@ export default function MapScreen() {
   const { activeRoute, walking } = useActiveRoute();
   const { user } = useAuth();
   const { settings, updateSetting } = useSettings();
-  const { incidents, reports, zones, newsPins, addReport, replaceReport } = useMapData(region);
+  // Year range for the crime-news pins: null = every year in the archive.
+  const [newsPeriod, setNewsPeriod] = useState(null);
+  const [newsYears, setNewsYears] = useState(null); // { min_year, max_year }
+  const [showPeriodSheet, setShowPeriodSheet] = useState(false);
+  useEffect(() => {
+    api.getNewsYears().then((y) => y.min_year && setNewsYears(y)).catch(() => {});
+  }, []);
+  const effectiveNewsPeriod =
+    newsPeriod || (newsYears ? { from: newsYears.min_year, to: newsYears.max_year } : null);
+  const newsPeriodLabel = newsPeriod
+    ? newsPeriod.from === newsPeriod.to
+      ? String(newsPeriod.from)
+      : `${newsPeriod.from}–${newsPeriod.to}`
+    : "All years";
+
+  const { incidents, reports, zones, newsPins, addReport, replaceReport } = useMapData(region, effectiveNewsPeriod);
   const visibleReports = settings.showReports ? reports : [];
   useWalkMonitor(activeRoute, walking);
 
@@ -130,7 +146,7 @@ export default function MapScreen() {
   const legendEntries = [
     zones.some((z) => z.label === "unsafe") && { color: colors.zone.unsafe.stroke, label: "Unsafe area" },
     zones.some((z) => z.label === "mixed") && { color: colors.zone.mixed.stroke, label: "Mixed area" },
-    newsPins.length > 0 && { color: colors.marker.news, label: "Crime news" },
+    newsPins.length > 0 && { color: colors.marker.news, label: `Crime news (${newsPeriodLabel})` },
     visibleReports.length > 0 && { color: colors.marker.report, label: "Community report" },
   ].filter(Boolean);
 
@@ -201,6 +217,35 @@ export default function MapScreen() {
         </MapView>
 
         <MapLegend entries={legendEntries} footnote={zonePeriod ? `Crime data ${zonePeriod}` : null} />
+
+        {/* Year range for the news pins */}
+        <TouchableOpacity style={styles.periodChip} onPress={() => setShowPeriodSheet(true)}>
+          <Ionicons name="calendar-outline" size={15} color={colors.primary} />
+          <Text style={styles.periodChipText}>
+            {newsPeriodLabel} · {newsPins.length} pins
+          </Text>
+          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <BottomSheet
+          visible={showPeriodSheet}
+          onClose={() => setShowPeriodSheet(false)}
+          title="Crime news on the map"
+          subtitle={
+            newsYears
+              ? `Show news pins from a range of years (${newsYears.min_year}–${newsYears.max_year} available).`
+              : "Show news pins from a range of years."
+          }
+        >
+          <PeriodPicker
+            value={newsPeriod}
+            range={newsYears}
+            onChange={setNewsPeriod}
+            defaultLabel="All years"
+            note={`${newsPins.length} placed articles shown`}
+          />
+          <TextButton label="Done" onPress={() => setShowPeriodSheet(false)} style={styles.periodDone} />
+        </BottomSheet>
 
         {/* DP-02: routing, search and map features derive from OSM data (ODbL). */}
         <Text style={styles.attribution}>© OpenStreetMap contributors</Text>
@@ -277,6 +322,21 @@ const makeStyles = ({ colors, elevation }) =>
     locateFab: { bottom: 100, backgroundColor: colors.surface },
     reportFab: { bottom: 160, backgroundColor: colors.danger },
     reportsToggleFab: { bottom: 220, backgroundColor: colors.surface },
+    periodChip: {
+      position: "absolute",
+      top: spacing.md,
+      left: spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.surface,
+      borderRadius: radius.pill,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      ...elevation,
+    },
+    periodChipText: { color: colors.text, fontWeight: "600", fontSize: 13 },
+    periodDone: { marginTop: spacing.lg },
     attribution: {
       position: "absolute",
       bottom: 4,

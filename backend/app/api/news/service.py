@@ -5,6 +5,7 @@ Shared by both callers named in afsnit 5.2.1.1: the Async Worker runs
 GET /api/news calls ``get_news``, which merges a live fetch with the archive.
 """
 import asyncio
+from datetime import UTC, datetime
 
 import httpx
 
@@ -27,6 +28,8 @@ CRIME_CATEGORIES = {"krimi", "retssager", "retssag"}
 
 LATEST_LIMIT = 200
 YEAR_LIMIT = 500
+RANGE_LIMIT = 1000  # news list for a date range
+PIN_LIMIT = 5000  # map pins for a date range (located items only)
 
 
 def is_crime_related(title: str, categories: list[str]) -> bool:
@@ -163,3 +166,40 @@ def relocate_archive() -> int:
     if updates:
         news_archive.set_locations(updates)
     return len(updates)
+
+
+async def get_news_range(
+    city: str | None, from_year: int, to_year: int, located_only: bool = False
+) -> list[NewsItem]:
+    """Archived items from ``from_year`` to ``to_year`` (inclusive), newest
+    first. If the range reaches this year, the live feeds are merged in too,
+    so the newest articles aren't missing before the poller archives them."""
+    city_filter = normalize_city(city)
+    limit = PIN_LIMIT if located_only else RANGE_LIMIT
+    items = news_archive.load_range(from_year, to_year, located_only=located_only, limit=20000)
+    if to_year >= datetime.now(UTC).year:
+        live = [i for i in await pool_live_feeds() if not located_only or i.latitude is not None]
+        items = [*live, *items]
+
+    out: list[NewsItem] = []
+    seen: set[str] = set()
+    for item in items:
+        key = item.url or item.title.lower()
+        title_key = item.title.strip().lower()
+        if key in seen or title_key in seen:
+            continue
+        if not from_year <= item.published_at.year <= to_year:
+            continue
+        if city_filter and not matches_city(city_filter, item.title, item.latitude, item.longitude):
+            continue
+        seen.update((key, title_key))
+        out.append(item)
+    out.sort(key=lambda i: i.published_at, reverse=True)
+    return out[:limit]
+
+
+def year_span() -> dict | None:
+    span = news_archive.year_span()
+    if not span:
+        return None
+    return {"min_year": span[0], "max_year": max(span[1], datetime.now(UTC).year)}

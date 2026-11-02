@@ -4,4 +4,5 @@ export { default as BottomSheet } from "./BottomSheet";
 export { default as Button, TextButton } from "./Button";
 export { default as ChipGroup } from "./ChipGroup";
 export { default as InfoCard, InfoText } from "./InfoCard";
+export { default as PeriodPicker } from "./PeriodPicker";
 export { default as StateView } from "./StateView";
