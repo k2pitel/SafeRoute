@@ -10,7 +10,10 @@ from app.config import settings
 from app.worker.base import (
     CRIME_STATS_REFRESH_INTERVAL_SECONDS,
     NEWS_POLL_INTERVAL_SECONDS,
+    NEWS_RELOCATE_INTERVAL_SECONDS,
+    REPORT_RETENTION_INTERVAL_SECONDS,
     SEGMENT_SCORE_INTERVAL_SECONDS,
+    WORLD_SAFETY_REFRESH_INTERVAL_SECONDS,
 )
 
 celery_app = Celery("saferoute", broker=settings.redis_url, backend=settings.redis_url)
@@ -33,6 +36,18 @@ celery_app.conf.update(
         "refresh-crime-stats": {
             "task": "app.worker.tasks.refresh_crime_stats",
             "schedule": float(CRIME_STATS_REFRESH_INTERVAL_SECONDS),
+        },
+        "purge-expired-reports": {
+            "task": "app.worker.tasks.purge_expired_reports",
+            "schedule": float(REPORT_RETENTION_INTERVAL_SECONDS),
+        },
+        "refresh-world-safety": {
+            "task": "app.worker.tasks.refresh_world_safety",
+            "schedule": float(WORLD_SAFETY_REFRESH_INTERVAL_SECONDS),
+        },
+        "relocate-news": {
+            "task": "app.worker.tasks.relocate_news",
+            "schedule": float(NEWS_RELOCATE_INTERVAL_SECONDS),
         },
     },
 )

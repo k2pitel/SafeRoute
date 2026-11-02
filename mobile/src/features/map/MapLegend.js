@@ -1,9 +1,10 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, elevation, radius, spacing, typography } from "../../theme";
+import { radius, spacing, useThemedStyles } from "../../theme";
 
 // Explains the marker colours. entries: [{ color, label }]; hidden when empty.
-export default function MapLegend({ entries }) {
+export default function MapLegend({ entries, footnote }) {
+  const styles = useThemedStyles(makeStyles);
   if (entries.length === 0) return null;
   return (
     <View style={styles.legend}>
@@ -13,21 +14,24 @@ export default function MapLegend({ entries }) {
           <Text style={styles.text}>{entry.label}</Text>
         </View>
       ))}
+      {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  legend: {
-    position: "absolute",
-    left: spacing.lg,
-    bottom: 100,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: 10,
-    ...elevation,
-  },
-  row: { flexDirection: "row", alignItems: "center", marginVertical: 2 },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.sm },
-  text: { ...typography.small, color: colors.textStrong },
-});
+const makeStyles = ({ colors, typography, elevation }) =>
+  StyleSheet.create({
+    legend: {
+      position: "absolute",
+      left: spacing.lg,
+      bottom: 100,
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      padding: 10,
+      ...elevation,
+    },
+    row: { flexDirection: "row", alignItems: "center", marginVertical: 2 },
+    dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.sm },
+    text: { ...typography.small, color: colors.textStrong },
+    footnote: { fontSize: 10, color: colors.textSubtle, marginTop: 4 },
+  });

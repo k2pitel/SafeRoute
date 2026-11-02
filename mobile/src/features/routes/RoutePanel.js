@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { Alert, Share, StyleSheet, View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "../../services/api";
 import { getCurrentCoordinates } from "../../services/location";
-import { colors, radius } from "../../theme";
+import { radius, useTheme, useThemedStyles } from "../../theme";
 import { ChipGroup } from "../../ui";
+import { loadContacts, sendLocationToContacts } from "../settings/emergencyContacts";
 import { useSettings } from "../settings/SettingsContext";
 import { useActiveRoute } from "./ActiveRouteContext";
 import PlaceSearchInput from "./PlaceSearchInput";
@@ -16,10 +17,47 @@ import { SORT_OPTIONS, rankRoutes, sortForProfile } from "./rankRoutes";
 // tapping it opens the search fields + route list, and picking an option
 // collapses it again — the route itself is drawn by MapScreen, which reads
 // it straight off ActiveRouteContext.
+// US-37: walking or cycling (car navigation is out of scope, F15).
+const MODES = [
+  { value: "walking", label: "Walk" },
+  { value: "cycling", label: "Bike" },
+];
+
+// US-39: share the chosen route. A link any phone can open without the app
+// (OpenStreetMap directions); an in-app deep link needs a backend share token.
+function shareRoute(route) {
+  const { origin, destination, option, mode } = route;
+  const engine = mode === "cycling" ? "fossgis_osrm_bike" : "fossgis_osrm_foot";
+  const url =
+    `https://www.openstreetmap.org/directions?engine=${engine}` +
+    `&route=${origin.latitude}%2C${origin.longitude}%3B${destination.latitude}%2C${destination.longitude}`;
+  const from = origin.primary || origin.label || "start";
+  const to = destination.primary || destination.label || "destination";
+  return Share.share({
+    message:
+      `My SafeRoute: ${from} → ${to}, ${Math.round(option.duration_minutes)} min, ` +
+      `safety ${option.safety_score.toFixed(1)}/10 (${option.safety_label}).
+${url}`,
+  });
+}
+
+// US-26: text the user's current position to their emergency contacts.
+async function textLocationToContacts() {
+  const contacts = await loadContacts();
+  if (!contacts.length) {
+    Alert.alert("No emergency contacts", "Add contacts under Settings → Emergency first.");
+    return;
+  }
+  const sent = await sendLocationToContacts(contacts);
+  if (!sent) Alert.alert("Location needed", "Allow location access to share where you are.");
+}
+
 const NO_ROUTE_MESSAGE = "No route could be found — try adjusting your start or destination.";
 
 export default function RoutePanel() {
-  const { activeRoute, setActiveRoute } = useActiveRoute();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { activeRoute, setActiveRoute, walking, setWalking } = useActiveRoute();
   const { settings } = useSettings();
 
   const [expanded, setExpanded] = useState(false);
@@ -31,6 +69,7 @@ export default function RoutePanel() {
   const [error, setError] = useState(null);
   const [locating, setLocating] = useState(false);
   const [myLocation, setMyLocation] = useState(null);
+  const [mode, setMode] = useState("walking");
 
   // F6: the risk profile decides the default ranking.
   useEffect(() => setSortBy(sortForProfile(settings.riskProfile)), [settings.riskProfile]);
@@ -65,7 +104,7 @@ export default function RoutePanel() {
     try {
       const from = `${origin.latitude},${origin.longitude}`;
       const to = `${destination.latitude},${destination.longitude}`;
-      const results = await api.getRoutes(from, to);
+      const results = await api.getRoutes(from, to, mode);
       setRoutes(results);
       if (results.length === 0) setError(NO_ROUTE_MESSAGE);
     } catch (e) {
@@ -79,7 +118,7 @@ export default function RoutePanel() {
   };
 
   const pickRoute = (option) => {
-    setActiveRoute({ origin, destination, option });
+    setActiveRoute({ origin, destination, option, mode });
     setExpanded(false);
   };
 
@@ -95,9 +134,34 @@ export default function RoutePanel() {
     return (
       <TouchableOpacity style={styles.collapsedBar} onPress={() => setExpanded(true)}>
         {activeRoute && (
-          <Text style={styles.collapsedText} numberOfLines={1}>
-            {`${Math.round(activeRoute.option.duration_minutes)} min · Safety: ${activeRoute.option.safety_label} (${activeRoute.option.safety_score.toFixed(1)}/10)`}
-          </Text>
+          <>
+            <Text style={styles.collapsedText} numberOfLines={1}>
+              {`${activeRoute.mode === "cycling" ? "🚲" : "🚶"} ${Math.round(activeRoute.option.duration_minutes)} min · Safety: ${activeRoute.option.safety_label} (${activeRoute.option.safety_score.toFixed(1)}/10)`}
+            </Text>
+            <View style={styles.routeActions}>
+              <TouchableOpacity
+                style={[styles.walkButton, walking && styles.walkButtonActive]}
+                onPress={() => setWalking(!walking)}
+              >
+                <Ionicons name={walking ? "stop" : "walk"} size={16} color={colors.onPrimary} />
+                <Text style={styles.walkButtonText}>{walking ? "Stop walk" : "Start walk"}</Text>
+              </TouchableOpacity>
+              {walking && settings.shareLocationWithContacts && (
+                <TouchableOpacity style={styles.iconAction} onPress={textLocationToContacts} accessibilityLabel="Text my location to emergency contacts">
+                  <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.safe} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.iconAction} onPress={() => shareRoute(activeRoute)} accessibilityLabel="Share route">
+                <Ionicons name="share-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconAction} onPress={() => setActiveRoute(null)} accessibilityLabel="Clear route">
+                <Ionicons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {walking && (
+              <Text style={styles.walkingHint}>Watching for red zones and late hours while the app is open.</Text>
+            )}
+          </>
         )}
         <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
       </TouchableOpacity>
@@ -141,6 +205,16 @@ export default function RoutePanel() {
         </View>
       </View>
 
+      <ChipGroup
+        options={MODES}
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          setRoutes([]); // results were for the other mode
+        }}
+        style={styles.modeRow}
+      />
+
       <TouchableOpacity
         style={[styles.button, (!origin || !destination) && styles.buttonDisabled]}
         onPress={search}
@@ -173,40 +247,56 @@ export default function RoutePanel() {
   );
 }
 
-const styles = StyleSheet.create({
-  collapsedBar: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    gap: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-  },
-  collapsedText: { color: colors.textStrong, fontSize: 13, fontWeight: "500" },
-  panel: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-    maxHeight: 420,
-  },
-  header: { alignItems: "center", justifyContent: "center", paddingVertical: 2, marginBottom: 6 },
-  fieldsRow: { flexDirection: "row", alignItems: "stretch" },
-  fieldsColumn: { flex: 1 },
-  sideButtons: { justifyContent: "space-between", marginLeft: 8 },
-  sideButton: { padding: 6 },
-  button: { backgroundColor: colors.primary, borderRadius: radius.sm, padding: 10, alignItems: "center", marginTop: 10 },
-  buttonDisabled: { backgroundColor: colors.primaryDisabled },
-  buttonText: { color: colors.onPrimary, fontWeight: "600", fontSize: 13 },
-  sortRow: { marginTop: 10, marginBottom: 6 },
-  error: { color: colors.danger, fontSize: 12, marginTop: 8 },
-  explanation: { color: colors.textMuted, marginTop: 4, fontSize: 11 },
-  results: { maxHeight: 220 },
-  routeCard: { borderWidth: 1, borderColor: colors.divider, borderRadius: radius.md, padding: 10, marginBottom: 6 },
-  duration: { fontSize: 15, fontWeight: "700" },
-  safety: { color: colors.textBody, marginTop: 2, fontSize: 12 },
-});
+const makeStyles = ({ colors }) =>
+  StyleSheet.create({
+    collapsedBar: {
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      gap: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    collapsedText: { color: colors.textStrong, fontSize: 13, fontWeight: "500" },
+    panel: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 14,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+      maxHeight: 420,
+    },
+    header: { alignItems: "center", justifyContent: "center", paddingVertical: 2, marginBottom: 6 },
+    fieldsRow: { flexDirection: "row", alignItems: "stretch" },
+    fieldsColumn: { flex: 1 },
+    sideButtons: { justifyContent: "space-between", marginLeft: 8 },
+    sideButton: { padding: 6 },
+    button: { backgroundColor: colors.primary, borderRadius: radius.sm, padding: 10, alignItems: "center", marginTop: 10 },
+    buttonDisabled: { backgroundColor: colors.primaryDisabled },
+    buttonText: { color: colors.onPrimary, fontWeight: "600", fontSize: 13 },
+    sortRow: { marginTop: 10, marginBottom: 6 },
+    modeRow: { marginTop: 10 },
+    routeActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+    walkButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.primary,
+      borderRadius: radius.pill,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+    },
+    walkButtonActive: { backgroundColor: colors.danger },
+    walkButtonText: { color: colors.onPrimary, fontWeight: "700", fontSize: 13 },
+    iconAction: { padding: 6 },
+    walkingHint: { color: colors.textSubtle, fontSize: 11 },
+    error: { color: colors.danger, fontSize: 12, marginTop: 8 },
+    explanation: { color: colors.textMuted, marginTop: 4, fontSize: 11 },
+    results: { maxHeight: 220 },
+    routeCard: { borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.surface, borderRadius: radius.md, padding: 10, marginBottom: 6 },
+    duration: { fontSize: 15, fontWeight: "700", color: colors.text },
+    safety: { color: colors.textBody, marginTop: 2, fontSize: 12 },
+  });

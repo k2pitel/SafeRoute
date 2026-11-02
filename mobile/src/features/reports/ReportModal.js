@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput } from "react-native";
 
-import { colors, inputStyle, spacing, typography } from "../../theme";
+import { spacing, useTheme, useThemedStyles } from "../../theme";
 import { BottomSheet, Button, ChipGroup, TextButton } from "../../ui";
 
 // UC2 step 4: incident type + when it happened.
@@ -25,6 +25,8 @@ const TIME_OPTIONS = [
 // requires login, handled by the caller (MapScreen) via AuthPromptModal
 // before this is shown.
 export default function ReportModal({ visible, coordinate, onClose, onSubmit }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [type, setType] = useState(REPORT_TYPES[0].value);
   const [description, setDescription] = useState("");
   const [minutesAgo, setMinutesAgo] = useState(0);
@@ -69,6 +71,7 @@ export default function ReportModal({ visible, coordinate, onClose, onSubmit }) 
       <TextInput
         style={styles.textArea}
         placeholder="What happened?"
+        placeholderTextColor={colors.textFaint}
         multiline
         numberOfLines={4}
         value={description}
@@ -83,15 +86,16 @@ export default function ReportModal({ visible, coordinate, onClose, onSubmit }) 
   );
 }
 
-const styles = StyleSheet.create({
-  label: { ...typography.sectionLabel, marginBottom: spacing.sm },
-  group: { marginBottom: spacing.lg },
-  textArea: {
-    ...inputStyle,
-    borderColor: colors.borderLight,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    textAlignVertical: "top",
-  },
-  error: { color: colors.danger, marginBottom: spacing.md },
-});
+const makeStyles = ({ colors, inputStyle, typography }) =>
+  StyleSheet.create({
+    label: { ...typography.sectionLabel, marginBottom: spacing.sm },
+    group: { marginBottom: spacing.lg },
+    textArea: {
+      ...inputStyle,
+      borderColor: colors.borderLight,
+      padding: spacing.md,
+      marginBottom: spacing.lg,
+      textAlignVertical: "top",
+    },
+    error: { color: colors.danger, marginBottom: spacing.md },
+  });

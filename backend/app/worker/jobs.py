@@ -8,6 +8,8 @@ from ever stopping the Backend API (NF7).
 import logging
 from datetime import UTC, datetime
 
+from app.api.auth import service as auth
+from app.api.crime_index import world as world_safety
 from app.api.news import service as news
 from app.api.zones import crime_stats
 from app.api.zones import updates as zone_updates
@@ -50,3 +52,26 @@ async def recalculate_segment_scores(area: BBox | None = None) -> None:
       5. upsert into ``segment_scores`` and publish a zone_updates event.
     """
     logger.info("recalculate_segment_scores: stub run for %s", area or "all areas")
+
+
+async def purge_expired_reports() -> int:
+    """US-59 retention: delete reports older than settings.report_retention_days (daily)."""
+    removed = auth.purge_expired_reports()
+    if removed:
+        logger.info("purge_expired_reports: deleted %d report(s)", removed)
+    return removed
+
+
+async def relocate_news() -> int:
+    """US-28: re-place archived articles with the current gazetteer (districts
+    beat cities). Cheap regex work; daily, so gazetteer fixes reach old items."""
+    moved = news.relocate_archive()
+    if moved:
+        logger.info("relocate_news: moved %d archived article(s)", moved)
+    return moved
+
+
+async def refresh_world_safety() -> int:
+    """Country and European-city safety data from Eurostat and the World Bank
+    (daily; the sources publish yearly). Keeps the old data on failure (NF7)."""
+    return await world_safety.refresh_cache()

@@ -15,7 +15,10 @@ import hashlib
 import hmac
 import json
 import secrets
+import threading
 import time
+from collections import defaultdict, deque
+from datetime import UTC, datetime, timedelta
 
 from app.config import settings
 from app.datalag import local_store
@@ -30,6 +33,29 @@ class EmailAlreadyRegisteredError(Exception):
 
 class InvalidCredentialsError(Exception):
     pass
+
+
+class TooManyLoginAttemptsError(Exception):
+    """US-58: too many failed logins for this email; ``retry_after_minutes`` is the window."""
+
+    def __init__(self, retry_after_minutes: int):
+        super().__init__(retry_after_minutes)
+        self.retry_after_minutes = retry_after_minutes
+
+
+# US-58: failed-login timestamps per email, in memory. Enough for the single
+# backend process of the launch variant; a shared store (Redis) is needed
+# once the API scales out (US-35).
+_failed_logins: dict[str, deque[float]] = defaultdict(deque)
+_failed_lock = threading.Lock()
+
+
+def _recent_failures(email: str, now: float) -> deque[float]:
+    window = settings.login_failure_window_minutes * 60
+    attempts = _failed_logins[email]
+    while attempts and attempts[0] < now - window:
+        attempts.popleft()
+    return attempts
 
 
 def hash_password(password: str) -> str:
@@ -87,8 +113,56 @@ def register(email: str, password: str) -> tuple[dict, str]:
 
 
 def authenticate(email: str, password: str) -> tuple[dict, str]:
-    """Check credentials. Returns (user, token)."""
-    user = local_store.get_user_by_email(_normalize_email(email))
+    """Check credentials. Returns (user, token). After
+    ``login_max_failures`` wrong passwords within the window, every attempt
+    for that email is refused until the window has passed (US-58)."""
+    email = _normalize_email(email)
+    now = time.time()
+    with _failed_lock:
+        if len(_recent_failures(email, now)) >= settings.login_max_failures:
+            raise TooManyLoginAttemptsError(settings.login_failure_window_minutes)
+
+    user = local_store.get_user_by_email(email)
     if not user or not verify_password(password, user["password_hash"]):
+        with _failed_lock:
+            _failed_logins[email].append(now)
         raise InvalidCredentialsError()
+
+    with _failed_lock:
+        _failed_logins.pop(email, None)
     return user, create_token(user["id"])
+
+
+def _my_report(report: dict) -> dict:
+    return {**report, "verified": report["confirmations"] >= settings.report_verification_threshold}
+
+
+def my_reports(user_id: str) -> list[dict]:
+    """US-38: the caller's own reports with their verification status."""
+    return [_my_report(r) for r in local_store.list_reports_by_user(user_id)]
+
+
+def export_my_data(user_id: str) -> dict | None:
+    """US-59 (GDPR art. 15/20): everything stored about the user. None if the
+    account no longer exists."""
+    user = local_store.get_user_by_id(user_id)
+    if not user:
+        return None
+    return {
+        "user": {"id": user["id"], "email": user["email"]},
+        "created_at": user["created_at"],
+        "reports": my_reports(user_id),
+        "confirmations_given": local_store.count_confirmations_by_user(user_id),
+        "exported_at": datetime.now(UTC),
+    }
+
+
+def delete_account(user_id: str) -> None:
+    """US-59 (GDPR art. 17): erase the account, its reports and its confirmations."""
+    local_store.delete_user(user_id)
+
+
+def purge_expired_reports() -> int:
+    """US-59 retention: drop reports older than ``report_retention_days``."""
+    cutoff = datetime.now(UTC) - timedelta(days=settings.report_retention_days)
+    return local_store.purge_reports_before(cutoff)

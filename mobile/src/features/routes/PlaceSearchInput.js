@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from "react-native";
 
 import { searchPlaces } from "../../services/geocoding";
-import { colors, inputStyle, radius } from "../../theme";
+import { radius, useTheme, useThemedStyles } from "../../theme";
 
 // Type-ahead place search, e.g. type "aarhus" and pick from the matching
 // places (like a train-app station picker) instead of typing raw lat/lon.
 export default function PlaceSearchInput({ placeholder, value, onSelect, rightAccessory, near }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [query, setQuery] = useState(value || "");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -57,6 +59,7 @@ export default function PlaceSearchInput({ placeholder, value, onSelect, rightAc
           value={query}
           onChangeText={handleChange}
           placeholder={placeholder}
+          placeholderTextColor={colors.textFaint}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
         />
@@ -65,7 +68,7 @@ export default function PlaceSearchInput({ placeholder, value, onSelect, rightAc
 
       {showDropdown && (
         <View style={styles.dropdown}>
-          {loading && <ActivityIndicator style={styles.loading} size="small" />}
+          {loading && <ActivityIndicator style={styles.loading} size="small" color={colors.primary} />}
           {error && <Text style={styles.error}>{error}</Text>}
           {results.map((item) => (
             <TouchableOpacity key={item.id} style={styles.resultRow} onPress={() => handleSelect(item)}>
@@ -83,30 +86,28 @@ export default function PlaceSearchInput({ placeholder, value, onSelect, rightAc
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: { position: "relative", zIndex: 10 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  input: { ...inputStyle, flex: 1 },
-  dropdown: {
-    position: "absolute",
-    top: "100%",
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    borderRadius: radius.sm,
-    marginTop: 4,
-    maxHeight: 220,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    zIndex: 20,
-  },
-  loading: { padding: 10 },
-  error: { padding: 10, color: colors.danger },
-  resultRow: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.dividerLight },
-  resultPrimary: { color: colors.text, fontWeight: "600" },
-  resultSecondary: { color: colors.textSubtle, fontSize: 12, marginTop: 2 },
-});
+const makeStyles = ({ colors, inputStyle, elevation }) =>
+  StyleSheet.create({
+    wrapper: { position: "relative", zIndex: 10 },
+    inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    input: { ...inputStyle, flex: 1 },
+    dropdown: {
+      position: "absolute",
+      top: "100%",
+      left: 0,
+      right: 0,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      borderRadius: radius.sm,
+      marginTop: 4,
+      maxHeight: 220,
+      ...elevation,
+      zIndex: 20,
+    },
+    loading: { padding: 10 },
+    error: { padding: 10, color: colors.danger },
+    resultRow: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.dividerLight },
+    resultPrimary: { color: colors.text, fontWeight: "600" },
+    resultSecondary: { color: colors.textSubtle, fontSize: 12, marginTop: 2 },
+  });

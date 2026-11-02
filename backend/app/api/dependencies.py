@@ -5,9 +5,12 @@ required" (F2, UC2 extension 3a) is enforced before the endpoint body runs
 and can't be forgotten in a new endpoint. Tests swap implementations via
 ``app.dependency_overrides``.
 """
+import hmac
+
 from fastapi import Header, HTTPException, Query, Request
 
 from app.api.auth import service as auth
+from app.config import settings
 from app.shared.geo import BBox, LatLon
 from app.worker import AsyncWorker
 
@@ -20,6 +23,14 @@ def get_current_user_id(authorization: str | None = Header(default=None)) -> str
     if not user_id:
         raise HTTPException(status_code=401, detail="Session expired — please log in again")
     return user_id
+
+
+def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
+    """US-58: admin-only endpoints. Disabled entirely unless ADMIN_TOKEN is set."""
+    if not settings.admin_token:
+        raise HTTPException(status_code=403, detail="Admin endpoints are disabled (no ADMIN_TOKEN configured)")
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, settings.admin_token):
+        raise HTTPException(status_code=403, detail="Admin token required")
 
 
 def get_async_worker(request: Request) -> AsyncWorker:

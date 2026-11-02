@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import { api } from "../../services/api";
 import { zonesToGeofences } from "../../services/geofence";
 
 // F7: only areas with an actual signal are coloured; "safe" stays uncoloured.
 const COLOURED_ZONE_LABELS = ["unsafe", "mixed"];
+
+// US-56: wait this long after the map stops moving before refetching, so a
+// pan doesn't fire a request per frame.
+export const REGION_DEBOUNCE_MS = 500;
+// NF4 / US-16: new reports from others show up within 2 minutes.
+export const REPORT_REFRESH_MS = 2 * 60 * 1000;
 
 // Bounding box string for the Backend API: minLon,minLat,maxLon,maxLat.
 export function regionToBbox(region) {
@@ -20,8 +27,8 @@ export function regionToBbox(region) {
  * Everything the map shows, fetched via services/api:
  *  - news pins: nationwide, fetched once for all archived years,
  *  - incidents, community reports and colour-coded zones (F7): for the
- *    visible region, refetched when the map centre moves (NF4: new reports
- *    show up on the next fetch).
+ *    visible region, refetched (debounced) whenever the map stops moving
+ *    (US-56); reports also every 2 min while the app is in front (NF4).
  * Failures leave the list empty rather than breaking the map (NF7).
  */
 export function useMapData(region) {
@@ -29,6 +36,7 @@ export function useMapData(region) {
   const [reports, setReports] = useState([]);
   const [zones, setZones] = useState([]);
   const [newsPins, setNewsPins] = useState([]);
+  const bboxRef = useRef(regionToBbox(region));
 
   useEffect(() => {
     api
@@ -37,16 +45,39 @@ export function useMapData(region) {
       .catch(() => setNewsPins([]));
   }, []);
 
+  const loadReports = useCallback(() => {
+    api.getReports(bboxRef.current).then(setReports).catch(() => {}); // keep the last list on a failed refresh
+  }, []);
+
   useEffect(() => {
-    const bbox = regionToBbox(region);
-    api.getIncidents(bbox).then(setIncidents).catch(() => setIncidents([]));
-    api.getReports(bbox).then(setReports).catch(() => setReports([]));
-    api
-      .getZones(bbox)
-      .then((data) => setZones(zonesToGeofences(data, { labels: COLOURED_ZONE_LABELS })))
-      .catch(() => setZones([]));
-    // Refetch only when the map centre moves, not on zoom alone (deltas).
-  }, [region.latitude, region.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
+    const timer = setTimeout(() => {
+      const bbox = regionToBbox(region);
+      bboxRef.current = bbox;
+      api.getIncidents(bbox).then(setIncidents).catch(() => setIncidents([]));
+      loadReports();
+      api
+        .getZones(bbox)
+        .then((data) => setZones(zonesToGeofences(data, { labels: COLOURED_ZONE_LABELS })))
+        .catch(() => setZones([]));
+    }, REGION_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [region, loadReports]); // a new region object arrives only when the map stops moving
+
+  // Periodic report refresh, paused while the app is in the background.
+  useEffect(() => {
+    let interval = setInterval(loadReports, REPORT_REFRESH_MS);
+    const sub = AppState.addEventListener("change", (state) => {
+      clearInterval(interval);
+      if (state === "active") {
+        loadReports();
+        interval = setInterval(loadReports, REPORT_REFRESH_MS);
+      }
+    });
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [loadReports]);
 
   const addReport = (report) => setReports((prev) => [...prev, report]);
   const replaceReport = (report) => setReports((prev) => prev.map((r) => (r.id === report.id ? report : r)));

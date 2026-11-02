@@ -3,7 +3,7 @@
 Submitting and confirming require login; who submitted a report is never
 exposed back to other users (ReportOut has no user_id, NF11).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import bbox_query, get_async_worker, get_current_user_id
 from app.api.reports import service as reports
@@ -15,8 +15,11 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 @router.get("", response_model=list[ReportOut])
-def list_reports(bbox: BBox = Depends(bbox_query)):
-    return reports.list_reports(bbox)
+def list_reports(
+    bbox: BBox = Depends(bbox_query),
+    max_age_hours: int | None = Query(None, ge=1, le=24 * 30, description="Hide older reports (default 24)"),
+):
+    return reports.list_reports(bbox, max_age_hours)
 
 
 @router.post("", response_model=ReportOut, status_code=201)

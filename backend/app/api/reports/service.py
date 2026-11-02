@@ -44,8 +44,12 @@ class AlreadyConfirmedError(Exception):
     """The user has already confirmed this report."""
 
 
-def list_reports(bbox: BBox) -> list[dict]:
-    return local_store.list_reports(bbox.min_lon, bbox.min_lat, bbox.max_lon, bbox.max_lat)
+def list_reports(bbox: BBox, max_age_hours: int | None = None) -> list[dict]:
+    """Reports in the box from the last ``max_age_hours`` (default
+    settings.report_visible_hours): old warnings shouldn't clutter the map (US-16)."""
+    hours = max_age_hours or settings.report_visible_hours
+    since = datetime.now(UTC) - timedelta(hours=hours)
+    return local_store.list_reports(bbox.min_lon, bbox.min_lat, bbox.max_lon, bbox.max_lat, since=since)
 
 
 def create_report(user_id: str, report: ReportCreate) -> dict:

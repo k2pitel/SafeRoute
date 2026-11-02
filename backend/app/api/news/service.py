@@ -8,7 +8,7 @@ import asyncio
 
 import httpx
 
-from app.api.news.places import find_location
+from app.api.news.places import find_location, matches_city
 from app.datalag import news_archive
 from app.external import news_sources
 from app.shared.news import NewsItem
@@ -118,7 +118,10 @@ async def get_news(city: str | None = None, year: int | None = None) -> list[New
     city_filter = normalize_city(city)
 
     if year is not None:
-        items = news_archive.load_items(city_filter=city_filter, year=year, limit=YEAR_LIMIT)
+        items = news_archive.load_items(city_filter=None, year=year, limit=5000)
+        if city_filter:
+            items = [i for i in items if matches_city(city_filter, i.title, i.latitude, i.longitude)]
+        items = items[:YEAR_LIMIT]
         items.sort(key=lambda i: i.published_at, reverse=True)
         return items
 
@@ -132,7 +135,7 @@ async def get_news(city: str | None = None, year: int | None = None) -> list[New
         title_key = item.title.strip().lower()
         if dedupe_key in seen or title_key in seen:
             continue
-        if city_filter and city_filter not in item.title.lower():
+        if city_filter and not matches_city(city_filter, item.title, item.latitude, item.longitude):
             continue
         seen.add(dedupe_key)
         seen.add(title_key)
@@ -144,3 +147,19 @@ async def get_news(city: str | None = None, year: int | None = None) -> list[New
 
 def archived_count() -> int:
     return news_archive.count()
+
+
+def relocate_archive() -> int:
+    """US-28: recompute every archived item's place from its headline with
+    the current gazetteer. Only headline text is used (article text isn't
+    stored), so items placed from article text keep their place unless the
+    headline names somewhere more specific. Returns how many moved."""
+    updates = []
+    for url, title, lat, lon in news_archive.all_locations():
+        new_lat, new_lon = find_location(title)
+        if new_lat is None or (new_lat, new_lon) == (lat, lon):
+            continue
+        updates.append((new_lat, new_lon, url))
+    if updates:
+        news_archive.set_locations(updates)
+    return len(updates)

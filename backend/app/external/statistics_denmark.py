@@ -39,8 +39,9 @@ async def _fetch_csv(client: httpx.AsyncClient, table: str, variables: list[dict
     return list(csv.DictReader(io.StringIO(text), delimiter=";"))
 
 
-async def fetch_violent_crime_by_area(client: httpx.AsyncClient) -> dict[str, float]:
-    """STRAF11, code 12, summed over the latest four quarters, per area."""
+async def fetch_violent_crime_by_area(client: httpx.AsyncClient) -> tuple[dict[str, float], list[str]]:
+    """STRAF11, code 12, summed over the latest four quarters, per area.
+    Also returns the quarters used (e.g. ["2025K3", ..., "2026K2"])."""
     quarters = await _latest_quarters(client, "STRAF11", QUARTERS_TO_SUM)
     rows = await _fetch_csv(
         client,
@@ -59,11 +60,11 @@ async def fetch_violent_crime_by_area(client: httpx.AsyncClient) -> dict[str, fl
         except ValueError:
             continue
         totals[name] = totals.get(name, 0) + value
-    return totals
+    return totals, quarters
 
 
-async def fetch_population_by_area(client: httpx.AsyncClient) -> dict[str, int]:
-    """FOLK1A, latest quarter, total population per area."""
+async def fetch_population_by_area(client: httpx.AsyncClient) -> tuple[dict[str, int], str]:
+    """FOLK1A, latest quarter, total population per area, plus that quarter."""
     quarters = await _latest_quarters(client, "FOLK1A", 1)
     rows = await _fetch_csv(
         client,
@@ -83,7 +84,7 @@ async def fetch_population_by_area(client: httpx.AsyncClient) -> dict[str, int]:
             populations[name] = int(float(row["INDHOLD"]))
         except ValueError:
             continue
-    return populations
+    return populations, quarters[-1]
 
 
 async def fetch_municipality_boundaries(client: httpx.AsyncClient) -> dict[str, list[dict]]:

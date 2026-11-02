@@ -9,11 +9,14 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from app.shared.geo import BBox
-from app.worker import jobs
+from app.worker import jobs, status
 from app.worker.base import (
     CRIME_STATS_REFRESH_INTERVAL_SECONDS,
     NEWS_POLL_INTERVAL_SECONDS,
+    NEWS_RELOCATE_INTERVAL_SECONDS,
+    REPORT_RETENTION_INTERVAL_SECONDS,
     SEGMENT_SCORE_INTERVAL_SECONDS,
+    WORLD_SAFETY_REFRESH_INTERVAL_SECONDS,
     AsyncWorker,
 )
 
@@ -23,6 +26,9 @@ PERIODIC_JOBS: list[tuple[str, float, Callable[[], Awaitable[object]]]] = [
     ("poll_news", NEWS_POLL_INTERVAL_SECONDS, jobs.poll_news),
     ("refresh_crime_stats", CRIME_STATS_REFRESH_INTERVAL_SECONDS, jobs.refresh_crime_stats),
     ("recalculate_segment_scores", SEGMENT_SCORE_INTERVAL_SECONDS, jobs.recalculate_segment_scores),
+    ("purge_expired_reports", REPORT_RETENTION_INTERVAL_SECONDS, jobs.purge_expired_reports),
+    ("relocate_news", NEWS_RELOCATE_INTERVAL_SECONDS, jobs.relocate_news),
+    ("refresh_world_safety", WORLD_SAFETY_REFRESH_INTERVAL_SECONDS, jobs.refresh_world_safety),
 ]
 
 
@@ -41,6 +47,8 @@ class BackgroundAsyncWorker(AsyncWorker):
             self._queue.put_nowait(area)
         self._pending.clear()
 
+        for name, interval, _job in self._periodic_jobs:
+            status.register(name, interval)
         self._tasks = [
             asyncio.create_task(self._run_periodically(name, interval, job), name=f"worker:{name}")
             for name, interval, job in self._periodic_jobs
@@ -65,8 +73,9 @@ class BackgroundAsyncWorker(AsyncWorker):
     async def _run_periodically(self, name: str, interval: float, job: Callable[[], Awaitable[object]]) -> None:
         while True:
             try:
-                await job()
-            except Exception:
+                status.record_success(name, await job())
+            except Exception as exc:
+                status.record_failure(name, exc)
                 logger.exception("%s failed, will retry next interval", name)
             await asyncio.sleep(interval)
 

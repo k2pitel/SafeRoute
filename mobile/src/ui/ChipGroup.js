@@ -1,10 +1,11 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import { colors, radius, spacing } from "../theme";
+import { radius, spacing, useThemedStyles } from "../theme";
 
 // Single-choice selector rendered as a row of pills (report type, time,
 // risk profile, ...). options: [{ value, label }].
 export default function ChipGroup({ options, value, onChange, style }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={[styles.row, style]}>
       {options.map((option) => {
@@ -23,16 +24,18 @@ export default function ChipGroup({ options, value, onChange, style }) {
   );
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  text: { color: colors.textStrong },
-  textActive: { color: colors.onPrimary },
-});
+const makeStyles = ({ colors }) =>
+  StyleSheet.create({
+    row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    chip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      borderRadius: radius.pill,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+    },
+    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    text: { color: colors.textStrong, fontWeight: "500" },
+    textActive: { color: colors.onPrimary, fontWeight: "600" },
+  });

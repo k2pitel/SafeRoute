@@ -8,6 +8,9 @@ from app.shared.geo import BBox
 NEWS_POLL_INTERVAL_SECONDS = 15 * 60  # nyhedskilder: every 15 minutes
 CRIME_STATS_REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # offentlige data: every 6 hours (they change quarterly)
 SEGMENT_SCORE_INTERVAL_SECONDS = 15 * 60  # periodic tryghedsscore recalculation
+REPORT_RETENTION_INTERVAL_SECONDS = 24 * 60 * 60  # GDPR retention purge (US-59), daily
+WORLD_SAFETY_REFRESH_INTERVAL_SECONDS = 24 * 60 * 60  # Eurostat + World Bank, yearly data
+NEWS_RELOCATE_INTERVAL_SECONDS = 24 * 60 * 60  # re-place archived news with the current gazetteer (US-28)
 
 
 class AsyncWorker(ABC):

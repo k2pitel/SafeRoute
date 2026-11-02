@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput } from "react-native";
 
-import { colors, inputStyle, spacing } from "../../theme";
+import { spacing, useTheme, useThemedStyles } from "../../theme";
 import { BottomSheet, Button, TextButton } from "../../ui";
 import { useAuth } from "./AuthContext";
 
 // Shown when a signed-out user taps "Report" (UC2 extension 3a) — reporting
 // requires an account so reports can't be faked or spammed anonymously.
 export default function AuthPromptModal({ visible, onClose, onAuthenticated }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { login, signup } = useAuth();
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [email, setEmail] = useState("");
@@ -43,6 +45,7 @@ export default function AuthPromptModal({ visible, onClose, onAuthenticated }) {
       <TextInput
         style={styles.input}
         placeholder="Email"
+        placeholderTextColor={colors.textFaint}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -50,7 +53,8 @@ export default function AuthPromptModal({ visible, onClose, onAuthenticated }) {
       />
       <TextInput
         style={styles.input}
-        placeholder="Password"
+        placeholder={isLogin ? "Password" : "Password (at least 8 characters)"}
+        placeholderTextColor={colors.textFaint}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -68,7 +72,8 @@ export default function AuthPromptModal({ visible, onClose, onAuthenticated }) {
   );
 }
 
-const styles = StyleSheet.create({
-  input: { ...inputStyle, borderColor: colors.borderLight, padding: spacing.md, marginBottom: spacing.md },
-  error: { color: colors.danger, marginBottom: spacing.md },
-});
+const makeStyles = ({ colors, inputStyle }) =>
+  StyleSheet.create({
+    input: { ...inputStyle, borderColor: colors.borderLight, padding: spacing.md, marginBottom: spacing.md },
+    error: { color: colors.danger, marginBottom: spacing.md },
+  });

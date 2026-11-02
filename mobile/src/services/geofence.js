@@ -58,6 +58,14 @@ export function zonesToGeofences(zones, { labels = ["unsafe"] } = {}) {
         id: polygons.length > 1 ? `${zone.id}#${index}` : zone.id,
         label: zone.safety_label,
         polygon: toRing(rings[0]),
+        // US-20: what the colour is based on, for the tap-a-zone card.
+        info: {
+          name: zone.name,
+          score: zone.safety_score,
+          rate: zone.crime_rate_per_100k,
+          nationalRate: zone.national_rate_per_100k,
+          period: zone.data_period,
+        },
       });
     });
   }

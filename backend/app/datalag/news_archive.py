@@ -114,3 +114,15 @@ def load_items(city_filter: str | None = None, limit: int = 500, year: int | Non
 def count() -> int:
     with _connect() as conn:
         return conn.execute("SELECT COUNT(*) FROM news_items").fetchone()[0]
+
+
+def all_locations() -> list[tuple[str, str, float | None, float | None]]:
+    """(url, title, latitude, longitude) for every archived item (US-28 re-tag)."""
+    with _connect() as conn:
+        return conn.execute("SELECT url, title, latitude, longitude FROM news_items").fetchall()
+
+
+def set_locations(updates: list[tuple[float | None, float | None, str]]) -> None:
+    """Bulk update of (latitude, longitude, url)."""
+    with _connect() as conn:
+        conn.executemany("UPDATE news_items SET latitude = ?, longitude = ? WHERE url = ?", updates)

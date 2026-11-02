@@ -15,11 +15,12 @@ Async Worker calls ``refresh_cache`` periodically (worker/jobs.py).
 """
 import logging
 import statistics
+from datetime import UTC, datetime
 
 import httpx
 
 from app.datalag import zone_cache
-from app.datalag.zone_cache import MunicipalityStats
+from app.datalag.zone_cache import DataInfo, MunicipalityStats
 from app.external import statistics_denmark
 
 logger = logging.getLogger("saferoute.crime_stats")
@@ -79,24 +80,47 @@ def build_municipality_stats(
     ]
 
 
-async def fetch_municipality_stats() -> list[MunicipalityStats]:
-    """Fresh stats from the public sources; empty list if any source fails."""
+# DP-04 sanity check: Denmark has 98 municipalities (+ Christiansø). A
+# snapshot with far fewer means a source changed shape; keep the old data.
+MIN_MUNICIPALITIES = 95
+
+
+class ValidationError(Exception):
+    """A fetched snapshot failed the sanity checks (DP-04)."""
+
+
+async def fetch_municipality_stats() -> tuple[list[MunicipalityStats], DataInfo | None]:
+    """Fresh stats from the public sources; ([], None) if any source fails."""
     async with httpx.AsyncClient(timeout=statistics_denmark.TIMEOUT_SECONDS) as client:
         try:
-            crime_by_area = await statistics_denmark.fetch_violent_crime_by_area(client)
-            population_by_area = await statistics_denmark.fetch_population_by_area(client)
+            crime_by_area, quarters = await statistics_denmark.fetch_violent_crime_by_area(client)
+            population_by_area, population_quarter = await statistics_denmark.fetch_population_by_area(client)
             boundaries = await statistics_denmark.fetch_municipality_boundaries(client)
         except statistics_denmark.FETCH_ERRORS as exc:
             logger.warning("crime_stats: fetch failed, returning empty (%s)", exc)
-            return []
-    return build_municipality_stats(crime_by_area, population_by_area, boundaries)
+            return [], None
+    info = DataInfo(
+        crime_period=f"{quarters[0]}-{quarters[-1]}" if quarters else "unknown",
+        population_period=population_quarter,
+        fetched_at=datetime.now(UTC),
+    )
+    return build_municipality_stats(crime_by_area, population_by_area, boundaries), info
 
 
 async def refresh_cache() -> int:
     """Rebuild the zone cache. Keeps the previous cache if the source is down
-    (NF7). Returns how many polygons are now cached."""
-    stats = await fetch_municipality_stats()
+    or the new data fails validation (NF7). Returns how many polygons are
+    now cached."""
+    stats, info = await fetch_municipality_stats()
     if stats:
+        municipalities = {s.name for s in stats}
+        if len(municipalities) < MIN_MUNICIPALITIES:
+            raise ValidationError(
+                f"only {len(municipalities)} municipalities matched (expected at least "
+                f"{MIN_MUNICIPALITIES}); kept the previous data"
+            )
         zone_cache.replace_all(stats)
-        logger.info("crime_stats: cached %d municipality polygons", len(stats))
+        if info:
+            zone_cache.set_info(info)
+        logger.info("crime_stats: cached %d municipality polygons (%s)", len(stats), info and info.crime_period)
     return len(zone_cache.get_all())

@@ -1,6 +1,7 @@
 """GET /api/news — crime-related news for Denmark, optionally per city or year (F9)."""
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
+from app.api.dependencies import require_admin
 from app.api.news import backfill as news_backfill
 from app.api.news import service as news
 from app.shared.news import NewsItem
@@ -22,7 +23,7 @@ def archive_status():
     return {"archived_count": news.archived_count()}
 
 
-@router.post("/backfill")
+@router.post("/backfill", dependencies=[Depends(require_admin)])
 async def trigger_backfill(background_tasks: BackgroundTasks):
     """One-time historical import from the Wayback Machine (api/news/backfill.py).
     Runs in the background since it makes several sequential requests to a

@@ -5,6 +5,7 @@ api/news/backfill.py to pin a news headline/article on the map when it names a r
 the feeds themselves carry no geodata, so this is always a "which town"
 approximation, never the actual crime scene.
 """
+import math
 import re
 
 # Approximate city/town centers. Covers the ~70 largest Danish towns, city
@@ -158,14 +159,25 @@ DANISH_PLACES = {
     "furesø": (55.7833, 12.3500),
 }
 
-# word-boundary regex per place name (compiled once), longest name first so
-# a specific district (e.g. "nørrebro") wins over the broader city it sits
-# inside ("københavn") when a headline names both.
+# City districts (the block above): a headline naming a district is placed
+# there even when it also names the city (US-28) — "Skud på Nørrebro i
+# København" belongs on Nørrebro, not on the city centre.
+DISTRICTS = {
+    "nørrebro", "østerbro", "vesterbro", "amager", "valby", "vanløse", "brønshøj",
+    "sydhavn", "christianshavn", "indre by", "gentofte", "risskov", "åbyhøj", "viby",
+    "brabrand", "skejby", "tilst", "hasle", "trøjborg", "vollsmose",
+}
+
+# Word-boundary regex per place name (compiled once). Districts first, then
+# longest name first, so the most specific place wins.
 _PLACE_PATTERNS = sorted(
     ((name, coords, re.compile(rf"\b{re.escape(name)}\b")) for name, coords in DANISH_PLACES.items()),
-    key=lambda entry: len(entry[0]),
-    reverse=True,
+    key=lambda entry: (entry[0] not in DISTRICTS, -len(entry[0])),
 )
+
+# How far from a city's centre an article may be placed and still count as
+# "in" that city for the News filter (covers its districts and suburbs).
+CITY_RADIUS_KM = 12
 
 
 def find_location(*texts: str) -> tuple[float | None, float | None]:
@@ -174,3 +186,27 @@ def find_location(*texts: str) -> tuple[float | None, float | None]:
         if pattern.search(combined):
             return coords
     return None, None
+
+
+def coords_for(place: str) -> tuple[float, float] | None:
+    """Centre of a known place name, e.g. 'Aarhus' → (56.16, 10.20)."""
+    return DANISH_PLACES.get(place.strip().lower())
+
+
+def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    k = math.cos(math.radians((lat1 + lat2) / 2))
+    return 111.2 * math.hypot(lat2 - lat1, (lon2 - lon1) * k)
+
+
+def matches_city(city: str, title: str, latitude: float | None, longitude: float | None) -> bool:
+    """US-28: an article belongs to ``city`` if the headline names it, or if
+    it was placed (from its text) within CITY_RADIUS_KM of the city centre —
+    so a story about Nørrebro shows under København even if the headline
+    never says "København"."""
+    city = city.strip().lower()
+    if city in title.lower():
+        return True
+    centre = coords_for(city)
+    if centre is None or latitude is None or longitude is None:
+        return False
+    return _distance_km(centre[0], centre[1], latitude, longitude) <= CITY_RADIUS_KM

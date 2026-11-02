@@ -23,7 +23,7 @@ mobile/coverage/
 dist/
 web-build/
 npm-debug.log*
-mobile/saferoute-qr.png
+mobile/saferoute-qr*.png
 
 # Logs
 *.log

@@ -22,26 +22,48 @@ def label_for_score(score: float) -> str:
     return "safe"
 
 
-def zones_in_bbox(bbox: BBox) -> list[ZoneOut]:
+def national_rate_per_100k() -> float:
+    """Population-weighted national violent-crime rate (each municipality
+    counted once, even if it has several polygon pieces)."""
+    seen: dict[str, MunicipalityStats] = {}
+    for entry in zone_cache.get_all():
+        seen.setdefault(entry.name, entry)
+    population = sum(e.population for e in seen.values())
+    if not population:
+        return 0.0
+    return round(sum(e.violent_crimes_per_year for e in seen.values()) / population * 100_000, 1)
+
+
+def zones_in_bbox(bbox: BBox, include_safe: bool = False) -> list[ZoneOut]:
     """Empty if the cache hasn't loaded yet or the source was unreachable —
-    never placeholder shapes."""
+    never placeholder shapes. By default only coloured (unsafe/mixed) zones
+    are sent: "safe" ones are drawn uncoloured anyway (US-20)."""
     # Municipalities with disconnected land (islands, exclaves) come back as
     # multiple polygon features sharing one name — count occurrences so each
     # piece still gets a unique id (a bare name would collide and break
     # React's list keys on the mobile side).
+    info = zone_cache.get_info()
+    national = national_rate_per_100k()
     seen_counts: dict[str, int] = {}
     zones = []
     for entry in zone_cache.get_all():
         if not entry.bbox.intersects(bbox):
+            continue
+        label = label_for_score(entry.safety_score)
+        if label == "safe" and not include_safe:
             continue
         seen_counts[entry.name] = seen_counts.get(entry.name, 0) + 1
         piece_id = entry.name if seen_counts[entry.name] == 1 else f"{entry.name}-{seen_counts[entry.name]}"
         zones.append(
             ZoneOut(
                 id=piece_id,
+                name=entry.name.title(),
                 safety_score=entry.safety_score,
-                safety_label=label_for_score(entry.safety_score),
-                geometry=entry.geometry,
+                safety_label=label,
+                crime_rate_per_100k=entry.crime_rate_per_100k,
+                national_rate_per_100k=national,
+                data_period=info.crime_period if info else None,
+                geometry=entry.display_geometry,
             )
         )
     return zones
@@ -49,6 +71,33 @@ def zones_in_bbox(bbox: BBox) -> list[ZoneOut]:
 
 def cached_zone_count() -> int:
     return len(zone_cache.get_all())
+
+
+def municipality_at(lat: float, lon: float) -> MunicipalityStats | None:
+    """The municipality containing the point, if the zones are loaded."""
+    for entry in zone_cache.get_all():
+        if entry.bbox.contains(lon, lat) and any(
+            _inside_ring(lon, lat, ring) for ring in _outer_rings(entry.geometry)
+        ):
+            return entry
+    return None
+
+
+def municipality_named(name: str) -> MunicipalityStats | None:
+    """Exact (normalised) municipality name, e.g. 'Aarhus' or 'Lyngby-Taarbæk'."""
+    key = name.strip().lower().replace("-", " ")
+    for entry in zone_cache.get_all():
+        if entry.name == key:
+            return entry
+    return None
+
+
+def all_municipalities() -> list[MunicipalityStats]:
+    """One entry per municipality (first polygon piece), sorted by name."""
+    seen: dict[str, MunicipalityStats] = {}
+    for entry in zone_cache.get_all():
+        seen.setdefault(entry.name, entry)
+    return sorted(seen.values(), key=lambda e: e.name)
 
 
 def _outer_rings(geometry: dict) -> list[list[list[float]]]:

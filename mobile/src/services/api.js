@@ -12,6 +12,8 @@ function devServerApiUrl() {
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL || devServerApiUrl() || "http://localhost:8000";
 
+const REQUEST_TIMEOUT_MS = 30000;
+
 // Set by AuthContext once a user logs in/out, so every request can carry
 // the session token without every call site having to pass it explicitly.
 let authToken = null;
@@ -23,9 +25,14 @@ async function request(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...options.headers };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
 
+  // A dead tunnel can leave fetch hanging instead of failing; give up after
+  // REQUEST_TIMEOUT_MS so screens show "can't reach" rather than spin forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   let res;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+    res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
   } catch {
     // The server never answered (dead tunnel, wrong LAN IP, backend not
     // running). Say so, instead of letting callers report it as e.g.
@@ -33,6 +40,8 @@ async function request(path, options = {}) {
     const error = new Error(`Can't reach the SafeRoute server at ${API_BASE_URL}`);
     error.offline = true;
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     // Prefer FastAPI's {"detail": ...} message over a generic status-code
@@ -53,6 +62,7 @@ async function request(path, options = {}) {
     }
     throw new Error(message);
   }
+  if (res.status === 204) return null; // e.g. DELETE /api/auth/me
   return res.json();
 }
 
@@ -61,6 +71,16 @@ export const api = {
   getZones: (bbox) => request(`/api/zones?bbox=${bbox}`),
   getRoutes: (from, to, mode = "walking") =>
     request(`/api/routes?from=${from}&to=${to}&mode=${mode}`),
+  // US-38 / US-59: the signed-in user's own data.
+  getMyReports: () => request("/api/auth/me/reports"),
+  exportMyData: () => request("/api/auth/me/export"),
+  deleteAccount: () => request("/api/auth/me", { method: "DELETE" }),
+  // US-29 / DP-07
+  getCrimeIndexCities: () => request("/api/crime-index/cities"),
+  // Free stand-ins for a paid crime index: Eurostat + World Bank.
+  getCountryRanking: () => request("/api/crime-index/countries"),
+  getEuropeanCityRanking: () => request("/api/crime-index/world-cities"),
+  getPipelineStatus: () => request("/api/pipeline/status"),
   getReports: (bbox) => request(`/api/reports?bbox=${bbox}`),
   submitReport: (report) =>
     request("/api/reports", { method: "POST", body: JSON.stringify(report) }),

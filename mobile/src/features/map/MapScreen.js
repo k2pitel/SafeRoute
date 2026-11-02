@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, View, TouchableOpacity } from "react-native";
+import { Alert, StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "../../services/api";
 import { getCurrentCoordinates } from "../../services/location";
-import { colors, elevation, radius, spacing } from "../../theme";
+import { radius, spacing, useTheme, useThemedStyles } from "../../theme";
 import { useAuth } from "../auth/AuthContext";
 import AuthPromptModal from "../auth/AuthPromptModal";
 import ReportModal from "../reports/ReportModal";
@@ -13,9 +13,10 @@ import { useActiveRoute } from "../routes/ActiveRouteContext";
 import RoutePanel from "../routes/RoutePanel";
 import { useSettings } from "../settings/SettingsContext";
 import { useWalkMonitor } from "../walk/useWalkMonitor";
+import { DARK_MAP_STYLE } from "./darkMapStyle";
 import { jitterCoordinate } from "./jitterCoordinate";
 import MapLegend from "./MapLegend";
-import { IncidentInfoCard, NewsInfoCard, ReportInfoCard } from "./MarkerInfoCards";
+import { IncidentInfoCard, NewsInfoCard, ReportInfoCard, ZoneInfoCard } from "./MarkerInfoCards";
 import { useMapData } from "./useMapData";
 
 // Centred so all of Denmark (incl. Bornholm) is visible on open, since news
@@ -24,23 +25,28 @@ const DENMARK_REGION = { latitude: 55.95, longitude: 10.8, latitudeDelta: 4.2, l
 const ZOOMED_IN_DELTA = 0.02;
 const SAFE_ROUTE_THRESHOLD = 6.5; // route drawn green at/above this tryghedsscore
 const ROUTE_EDGE_PADDING = { top: 80, right: 60, bottom: 80, left: 60 };
+// US-18: report pins are drawn 30–80 m off their true position, so a pin
+// never points at the reporter's exact doorstep. Deterministic per report.
+const REPORT_JITTER = { minDegrees: 0.0003, spreadDegrees: 0.0004 };
 
 // Kort: colour-coded zones (F7), marker details (F8), confirming reports
 // (F3) + UC1 (route panel, drawn route, walk monitoring F5) + UC2 (report button).
 export default function MapScreen() {
+  const { colors, dark } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const mapRef = useRef(null);
   const [region, setRegion] = useState(DENMARK_REGION);
-  const [selected, setSelected] = useState(null); // { kind: "incident" | "report" | "news", item }
+  const [selected, setSelected] = useState(null); // { kind: "incident" | "report" | "news" | "zone", item }
   const [reportCoordinate, setReportCoordinate] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const afterLogin = useRef(null); // what to continue with once AuthPromptModal succeeds
-  const { activeRoute } = useActiveRoute();
+  const { activeRoute, walking } = useActiveRoute();
   const { user } = useAuth();
   const { settings, updateSetting } = useSettings();
   const { incidents, reports, zones, newsPins, addReport, replaceReport } = useMapData(region);
   const visibleReports = settings.showReports ? reports : [];
-  useWalkMonitor(activeRoute);
+  useWalkMonitor(activeRoute, walking);
 
   // Hide/show community report pins; remembered across restarts (SettingsContext).
   const toggleReports = () => {
@@ -119,6 +125,8 @@ export default function MapScreen() {
 
   const routeColor = activeRoute?.option.safety_score >= SAFE_ROUTE_THRESHOLD ? colors.safe : colors.danger;
 
+  const zonePeriod = zones.find((z) => z.info?.period)?.info.period;
+
   const legendEntries = [
     zones.some((z) => z.label === "unsafe") && { color: colors.zone.unsafe.stroke, label: "Unsafe area" },
     zones.some((z) => z.label === "mixed") && { color: colors.zone.mixed.stroke, label: "Mixed area" },
@@ -131,7 +139,15 @@ export default function MapScreen() {
       <RoutePanel />
 
       <View style={styles.mapWrapper}>
-        <MapView ref={mapRef} style={styles.map} initialRegion={region} showsUserLocation>
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={region}
+          onRegionChangeComplete={setRegion}
+          showsUserLocation
+          userInterfaceStyle={dark ? "dark" : "light"}
+          customMapStyle={dark ? DARK_MAP_STYLE : []}
+        >
           {zones.map((zone) => (
             <Polygon
               key={`zone-${zone.id}`}
@@ -139,6 +155,8 @@ export default function MapScreen() {
               fillColor={colors.zone[zone.label].fill}
               strokeColor={colors.zone[zone.label].stroke}
               strokeWidth={1}
+              tappable
+              onPress={() => setSelected({ kind: "zone", item: zone.info })}
             />
           ))}
 
@@ -163,7 +181,7 @@ export default function MapScreen() {
           {visibleReports.map((report) => (
             <Marker
               key={`report-${report.id}`}
-              coordinate={{ latitude: report.latitude, longitude: report.longitude }}
+              coordinate={jitterCoordinate(`report-${report.id}`, report.latitude, report.longitude, REPORT_JITTER)}
               pinColor={colors.marker.report}
               onPress={() => setSelected({ kind: "report", item: report })}
             />
@@ -182,7 +200,10 @@ export default function MapScreen() {
           )}
         </MapView>
 
-        <MapLegend entries={legendEntries} />
+        <MapLegend entries={legendEntries} footnote={zonePeriod ? `Crime data ${zonePeriod}` : null} />
+
+        {/* DP-02: routing, search and map features derive from OSM data (ODbL). */}
+        <Text style={styles.attribution}>© OpenStreetMap contributors</Text>
 
         <TouchableOpacity style={[styles.fab, styles.reportFab]} onPress={handleReportPress}>
           <Ionicons name="warning" size={22} color={colors.onPrimary} />
@@ -212,6 +233,7 @@ export default function MapScreen() {
           />
         )}
         {selected?.kind === "news" && <NewsInfoCard item={selected.item} onClose={() => setSelected(null)} />}
+        {selected?.kind === "zone" && <ZoneInfoCard zone={selected.item} onClose={() => setSelected(null)} />}
       </View>
 
       <AuthPromptModal
@@ -237,12 +259,34 @@ export default function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  mapWrapper: { flex: 1 },
-  map: { flex: 1 },
-  fab: { position: "absolute", right: spacing.lg, borderRadius: radius.fab, ...elevation },
-  locateFab: { bottom: 100, backgroundColor: colors.surface, padding: 10 },
-  reportFab: { bottom: 160, backgroundColor: colors.danger, padding: spacing.md },
-  reportsToggleFab: { bottom: 220, backgroundColor: colors.surface, padding: 10 },
-});
+const makeStyles = ({ colors, elevation }) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    mapWrapper: { flex: 1 },
+    map: { flex: 1 },
+    fab: {
+      position: "absolute",
+      right: spacing.lg,
+      width: 50,
+      height: 50,
+      borderRadius: radius.fab,
+      alignItems: "center",
+      justifyContent: "center",
+      ...elevation,
+    },
+    locateFab: { bottom: 100, backgroundColor: colors.surface },
+    reportFab: { bottom: 160, backgroundColor: colors.danger },
+    reportsToggleFab: { bottom: 220, backgroundColor: colors.surface },
+    attribution: {
+      position: "absolute",
+      bottom: 4,
+      alignSelf: "center",
+      fontSize: 10,
+      color: colors.textMuted,
+      backgroundColor: colors.surface,
+      opacity: 0.85,
+      paddingHorizontal: 6,
+      borderRadius: 4,
+      overflow: "hidden",
+    },
+  });

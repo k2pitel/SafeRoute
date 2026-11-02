@@ -29,6 +29,25 @@ class Settings(BaseSettings):
     report_rate_limit: int = 5
     report_rate_window_minutes: int = 60
 
+    # NF4/US-16: reports older than this are hidden from the map (still kept
+    # for scoring until report_retention_days).
+    report_visible_hours: int = 24
+    # US-59 (GDPR): reports and confirmations are deleted after this many days.
+    report_retention_days: int = 365
+
+    # US-58: login brute-force limit, per email, per rolling window.
+    login_max_failures: int = 10
+    login_failure_window_minutes: int = 15
+
+    # US-58: CORS. Native apps don't send Origin; this only matters for the
+    # web build. Quick tunnels get random names, hence the regex.
+    cors_origins: list[str] = ["http://localhost:8081", "http://localhost:19006", "http://localhost:8083"]
+    cors_origin_regex: str | None = r"https://[a-z0-9-]+\.(trycloudflare\.com|on\.expo\.app|exp\.direct)"
+
+    # US-58: admin-only endpoints (e.g. POST /api/news/backfill) need this
+    # value in the X-Admin-Token header. Unset = those endpoints are disabled.
+    admin_token: str | None = None
+
     # Anchored to backend/ so uvicorn, alembic and scripts read the same file
     # whatever directory they are started from.
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")

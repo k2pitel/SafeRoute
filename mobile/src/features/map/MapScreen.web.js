@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, View, Text, FlatList, TouchableOpacity } from "react-native";
 
 import { api } from "../../services/api";
-import { colors, spacing, typography } from "../../theme";
+import { spacing, useThemedStyles } from "../../theme";
 import RoutePanel from "../routes/RoutePanel";
 import { IncidentInfoCard } from "./MarkerInfoCards";
 
@@ -13,6 +13,7 @@ const WEB_BBOX = [10.15, 56.13, 10.26, 56.19].join(",");
 // web (Metro picks this file over MapScreen.js automatically) we fall back
 // to a plain list of incidents instead of a rendered map.
 export default function MapScreen() {
+  const styles = useThemedStyles(makeStyles);
   const [incidents, setIncidents] = useState([]);
   const [selectedIncident, setSelectedIncident] = useState(null);
 
@@ -51,12 +52,13 @@ export default function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  banner: { backgroundColor: colors.warningSurface, padding: spacing.md },
-  bannerText: { color: colors.warningText, ...typography.caption },
-  empty: { padding: spacing.lg, color: colors.textMuted },
-  row: { padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  rowTitle: { fontWeight: "bold", textTransform: "capitalize" },
-  rowSubtitle: { color: colors.textMuted, marginTop: 2 },
-});
+const makeStyles = ({ colors, typography }) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    banner: { backgroundColor: colors.warningSurface, padding: spacing.md },
+    bannerText: { color: colors.warningText, ...typography.caption },
+    empty: { padding: spacing.lg, color: colors.textMuted },
+    row: { padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    rowTitle: { fontWeight: "bold", textTransform: "capitalize", color: colors.text },
+    rowSubtitle: { color: colors.textMuted, marginTop: 2 },
+  });

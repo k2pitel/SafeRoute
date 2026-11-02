@@ -108,17 +108,83 @@ def get_report(report_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def list_reports(min_lon: float, min_lat: float, max_lon: float, max_lat: float, limit: int = 200) -> list[dict]:
+def get_user_by_id(user_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_reports(
+    min_lon: float,
+    min_lat: float,
+    max_lon: float,
+    max_lat: float,
+    limit: int = 200,
+    since: datetime | None = None,
+) -> list[dict]:
+    """Reports inside the box, newest first. ``since`` hides older ones (US-16)."""
+    since_iso = since.astimezone(UTC).isoformat() if since else ""
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT * FROM reports
             WHERE longitude BETWEEN ? AND ? AND latitude BETWEEN ? AND ?
+              AND occurred_at >= ?
             ORDER BY created_at DESC LIMIT ?
             """,
-            (min_lon, max_lon, min_lat, max_lat, limit),
+            (min_lon, max_lon, min_lat, max_lat, since_iso, limit),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def list_reports_by_user(user_id: str) -> list[dict]:
+    """The user's own reports, newest first (US-38, US-59 export)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM reports WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def count_confirmations_by_user(user_id: str) -> int:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM report_confirmations WHERE user_id = ?", (user_id,)
+        ).fetchone()[0]
+
+
+def delete_user(user_id: str) -> None:
+    """GDPR erasure (US-59): the account, its reports (and the confirmations
+    on them), and the confirmations it gave — with counters kept consistent."""
+    with _connect() as conn:
+        given = [
+            row[0]
+            for row in conn.execute(
+                "SELECT report_id FROM report_confirmations WHERE user_id = ?", (user_id,)
+            ).fetchall()
+        ]
+        for report_id in given:
+            conn.execute(
+                "UPDATE reports SET confirmations = MAX(confirmations - 1, 0) WHERE id = ?", (report_id,)
+            )
+        conn.execute("DELETE FROM report_confirmations WHERE user_id = ?", (user_id,))
+        conn.execute(
+            "DELETE FROM report_confirmations WHERE report_id IN (SELECT id FROM reports WHERE user_id = ?)",
+            (user_id,),
+        )
+        conn.execute("DELETE FROM reports WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+def purge_reports_before(cutoff: datetime) -> int:
+    """Retention (US-59): delete reports created before ``cutoff``. Returns the count."""
+    cutoff_iso = cutoff.astimezone(UTC).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM report_confirmations WHERE report_id IN (SELECT id FROM reports WHERE created_at < ?)",
+            (cutoff_iso,),
+        )
+        return conn.execute("DELETE FROM reports WHERE created_at < ?", (cutoff_iso,)).rowcount
 
 
 def add_confirmation(report_id: int, user_id: str) -> bool:

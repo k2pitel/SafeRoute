@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS = {
   timeAlerts: true, // F5: alert at hours when unsafety historically rises
   shareLocationWithContacts: false,
   showReports: true, // community report pins on the map (toggle on MapScreen)
+  appearance: "system", // 'system' | 'light' | 'dark' (theme/ThemeProvider)
 };
 
 const SettingsContext = createContext(null);

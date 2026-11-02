@@ -30,3 +30,18 @@ def ingest_news():
 @celery_app.task(name="app.worker.tasks.refresh_crime_stats")
 def refresh_crime_stats():
     return asyncio.run(jobs.refresh_crime_stats())
+
+
+@celery_app.task(name="app.worker.tasks.purge_expired_reports")
+def purge_expired_reports():
+    return asyncio.run(jobs.purge_expired_reports())
+
+
+@celery_app.task(name="app.worker.tasks.relocate_news")
+def relocate_news():
+    return asyncio.run(jobs.relocate_news())
+
+
+@celery_app.task(name="app.worker.tasks.refresh_world_safety")
+def refresh_world_safety():
+    return asyncio.run(jobs.refresh_world_safety())

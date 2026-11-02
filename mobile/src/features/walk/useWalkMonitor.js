@@ -29,12 +29,12 @@ export function routeBbox(coordinates, margin = ZONE_MARGIN_DEGREES) {
  * the position itself never leaves the phone (NF11). Honours the alert
  * switches in Settings (F6). Stops when the route is cleared or replaced.
  */
-export function useWalkMonitor(activeRoute) {
+export function useWalkMonitor(activeRoute, walking = true) {
   const { settings } = useSettings();
   const { zoneAlerts, timeAlerts } = settings;
 
   useEffect(() => {
-    if (!activeRoute || (!zoneAlerts && !timeAlerts)) return undefined;
+    if (!activeRoute || !walking || (!zoneAlerts && !timeAlerts)) return undefined;
 
     let cancelled = false;
     let watch = null;
@@ -64,5 +64,5 @@ export function useWalkMonitor(activeRoute) {
       watch?.remove();
       socket?.close();
     };
-  }, [activeRoute, zoneAlerts, timeAlerts]);
+  }, [activeRoute, walking, zoneAlerts, timeAlerts]);
 }
