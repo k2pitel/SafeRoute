@@ -1,6 +1,16 @@
+import Constants from "expo-constants";
+
 // Thin API client for the SafeRoute backend.
-// Base URL is read from app config / env — see mobile/.env.example.
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
+// EXPO_PUBLIC_API_BASE_URL wins when set (see mobile/.env.example). Otherwise,
+// in development, the phone already reaches Metro at <host>:8081, so the
+// backend is assumed on the same host at :8000 — no LAN IP to keep in sync.
+function devServerApiUrl() {
+  const host = Constants.expoConfig?.hostUri?.split(":")[0];
+  return host ? `http://${host}:8000` : null;
+}
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || devServerApiUrl() || "http://localhost:8000";
 
 // Set by AuthContext once a user logs in/out, so every request can carry
 // the session token without every call site having to pass it explicitly.
