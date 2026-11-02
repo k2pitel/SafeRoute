@@ -1,11 +1,20 @@
-version: "3.9"
-
-# Deployment of the target architecture (figur 4.3): Backend API + Async
-# Worker on the application server, PostgreSQL/PostGIS (+ Redis as the
-# Celery broker) on the database server, OSRM as its own self-hosted
-# container. The Mobile Client runs on the user's phone.
+# Deployment of the architecture in figur 4.3: Backend API (+ Async Worker),
+# PostgreSQL/PostGIS and a self-hosted OSRM. The Mobile Client runs on the
+# user's phone.
+#
+#   docker compose -f infrastructure/docker-compose.yml up --build
+#
+# By default the Async Worker is the launch variant from afsnit 4.3.4.5: a
+# background process inside the Backend API container, so no broker is
+# needed. The Celery/Redis target architecture is opt-in via a profile:
+#
+#   ASYNC_WORKER=celery docker compose -f infrastructure/docker-compose.yml --profile celery up --build
+#
+# Known limitation of the celery profile: the zone cache is in memory and the
+# dev-time stores are SQLite files, so data the worker container computes is
+# not visible to the backend container until the Datalag moves to PostgreSQL.
 services:
-  # Datalag
+  # Datalag (target schema; created with `alembic upgrade head`)
   postgres:
     image: postgis/postgis:16-3.4
     environment:
@@ -17,13 +26,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # Broker for the Celery Async Worker
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  # Rutemotor, self-hosted (NF6/NF7) — build the graph first: infra/osrm/README.md
+  # Rutemotor, self-hosted (NF6/NF7). Build the graph first: infrastructure/osrm/README.md
   osrm:
     image: osrm/osrm-backend
     command: osrm-routed --algorithm mld /data/map.osrm
@@ -32,34 +35,51 @@ services:
     ports:
       - "5000:5000"
 
-  # Backend API. Uses the Celery Async Worker realisation, so periodic jobs
-  # run only in `worker`, and talks to the self-hosted OSRM.
+  # Backend API
   backend:
     build:
       context: ..
-      dockerfile: infra/docker/backend.Dockerfile
+      dockerfile: infrastructure/docker/backend.Dockerfile
     env_file:
-      - ../backend/.env
+      - path: ../backend/.env
+        required: false
     environment:
-      ASYNC_WORKER: celery
+      ASYNC_WORKER: ${ASYNC_WORKER:-background}
+      DATABASE_URL: postgresql://saferoute:saferoute@postgres:5432/saferoute
+      REDIS_URL: redis://redis:6379/0
       OSRM_SERVER_URL: http://osrm:5000
+    volumes:
+      - backend_data:/app/data  # dev-time SQLite stores (users, reports, news archive)
     depends_on:
       - postgres
-      - redis
       - osrm
     ports:
       - "8000:8000"
 
-  # Async Worker, target architecture: Celery worker + Beat
+  # Broker for the Celery Async Worker (target architecture only)
+  redis:
+    image: redis:7-alpine
+    profiles: ["celery"]
+    ports:
+      - "6379:6379"
+
+  # Async Worker, target architecture: Celery worker + Beat, same image as the backend
   worker:
     build:
       context: ..
-      dockerfile: infra/docker/worker.Dockerfile
+      dockerfile: infrastructure/docker/backend.Dockerfile
+    command: celery -A app.worker.celery_app worker --beat -l info
+    profiles: ["celery"]
     env_file:
-      - ../backend/.env
+      - path: ../backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://saferoute:saferoute@postgres:5432/saferoute
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - postgres
       - redis
 
 volumes:
   postgres_data:
+  backend_data:

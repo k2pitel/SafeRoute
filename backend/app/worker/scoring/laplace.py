@@ -5,7 +5,7 @@ Applied to aggregated user-submitted reports/location data before it is
 allowed to influence public-facing safety scores or heatmaps, so individual
 users can't be re-identified from the aggregate output.
 
-See README > Privacy.
+Must be applied once, at write time, never per read (afsnit 4.2.4).
 """
 import numpy as np
 

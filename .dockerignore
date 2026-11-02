@@ -1,5 +1,7 @@
-# Build context for infra/docker/*.Dockerfile is the repo root.
+# Build context for infrastructure/docker/backend.Dockerfile is the repo root.
 .git
+.github
+.claude
 **/__pycache__
 **/.pytest_cache
 **/.ruff_cache
@@ -8,4 +10,4 @@ backend/.venv
 backend/data
 mobile
 docs
-infra/osrm-data
+infrastructure/osrm-data

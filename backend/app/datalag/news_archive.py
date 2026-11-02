@@ -79,7 +79,7 @@ def load_items(city_filter: str | None = None, limit: int = 500, year: int | Non
     year: restricts to that calendar year (ISO date strings sort/compare
     correctly as plain text, so a "YYYY-01-01" .. "YYYY-12-31" range works
     without parsing every row). Without it, this is "most recent N" — with
-    thousands of items now archived (see news_backfill.py), the live/recent
+    thousands of items now archived (see api/news/backfill.py), the live/recent
     ones would otherwise always crowd out everything from 2020-2025.
     """
     with _connect() as conn:

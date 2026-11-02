@@ -1,7 +1,8 @@
 """Feature engineering for the segment safety-scoring model.
 
 Turns raw incidents/reports/context for a road segment into the feature
-vector the model consumes. See README > Machine Learning Approach.
+vector the model consumes (afsnit 4.2.1). Not wired into the jobs yet, see
+worker/jobs.recalculate_segment_scores.
 """
 from dataclasses import asdict, dataclass
 

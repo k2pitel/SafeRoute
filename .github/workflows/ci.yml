@@ -20,6 +20,43 @@ jobs:
       - name: Lint
         working-directory: backend
         run: ruff check .
+      - name: App starts (import + route table)
+        working-directory: backend
+        run: python -c "from app.main import create_app; print(len(create_app().routes), 'routes')"
+
+  # The PostGIS target schema (afsnit 5.4.3): every migration must apply and roll back.
+  backend-migrations:
+    runs-on: ubuntu-latest
+    needs: [backend-lint]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: saferoute
+          POSTGRES_PASSWORD: saferoute
+          POSTGRES_DB: saferoute
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U saferoute"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://saferoute:saferoute@localhost:5432/saferoute
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend deps
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Migrate up and down
+        working-directory: backend
+        run: |
+          alembic upgrade head
+          alembic downgrade base
 
   mobile-lint:
     runs-on: ubuntu-latest
@@ -41,4 +78,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
-        run: docker build -f infra/docker/backend.Dockerfile -t saferoute-backend .
+        run: docker build -f infrastructure/docker/backend.Dockerfile -t saferoute-backend .

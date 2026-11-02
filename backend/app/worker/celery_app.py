@@ -1,6 +1,6 @@
 """Celery application — target-architecture Async Worker (afsnit 4.3.4.5).
 
-Started as its own container (infra/docker/worker.Dockerfile):
+Started as its own container (``worker`` in infrastructure/docker-compose.yml):
     celery -A app.worker.celery_app worker --beat -l info
 The Beat schedule mirrors the launch variant's intervals (worker/base.py).
 """

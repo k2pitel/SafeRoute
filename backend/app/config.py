@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     report_rate_limit: int = 5
     report_rate_window_minutes: int = 60
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Anchored to backend/ so uvicorn, alembic and scripts read the same file
+    # whatever directory they are started from.
+    model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
 
 settings = Settings()

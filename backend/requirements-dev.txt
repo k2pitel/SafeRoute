@@ -1,5 +1,5 @@
 # Tests and lint on top of the runtime dependencies (CI, local development).
 -r requirements.txt
 pytest==9.1.1
-pytest-cov
-ruff
+pytest-cov==7.1.0
+ruff==0.17.1

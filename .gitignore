@@ -32,7 +32,7 @@ mobile/saferoute-qr.png
 .DS_Store
 
 # Docker
-infra/osrm-data/
+infrastructure/osrm-data/
 
 # IDE
 .vscode/

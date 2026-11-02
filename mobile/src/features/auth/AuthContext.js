@@ -6,7 +6,7 @@ import { api, setAuthToken } from "../../services/api";
 const TOKEN_KEY = "saferoute_auth_token";
 const USER_KEY = "saferoute_auth_user";
 
-// Reports require login (see backend/app/routers/auth.py) so they can't be
+// Reports require login (see backend/app/api/auth/) so they can't be
 // faked/spammed anonymously. This holds the signed-in user + session token
 // app-wide, persisted in SecureStore so login survives an app restart.
 const AuthContext = createContext(null);
