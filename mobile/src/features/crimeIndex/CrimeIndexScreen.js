@@ -140,14 +140,13 @@ function CityView() {
 
           <View style={styles.scoreRow}>
             <ScoreCard
-              label="Crime index"
-              value={data.crime_index.toFixed(0)}
-              suffix=" / 100"
-              icon="warning-outline"
+              label={`of Danish municipalities have a lower rate`}
+              value={`${data.crime_index.toFixed(0)}%`}
+              icon="stats-chart-outline"
               tint={levelTint}
             />
             <ScoreCard
-              label="Safety score"
+              label="Map safety score (same as the map colour)"
               value={(data.safety_index / 10).toFixed(1)}
               suffix=" / 10"
               icon="shield-checkmark-outline"
@@ -156,7 +155,7 @@ function CityView() {
           </View>
 
           <View style={styles.compareCard}>
-            <Text style={styles.compareTitle}>Violent crimes per 100,000 residents per year</Text>
+            <Text style={styles.compareTitle}>Reported violent offences per 100,000 residents per year</Text>
             <View style={styles.compareRow}>
               <Text style={styles.compareName}>{data.municipality}</Text>
               <Text style={[styles.compareValue, { color: levelTint.fg }]}>{data.rate_per_100k.toFixed(0)}</Text>
@@ -171,10 +170,19 @@ function CityView() {
               <Text style={styles.compareHint}>Denmark average</Text>
               <Text style={styles.compareHint}>{data.national_rate_per_100k.toFixed(0)}</Text>
             </View>
+            <Text style={styles.explain}>
+              Every reported violent offence, incl. minor assaults and threats: a much broader count than homicides, so
+              compare it only with other Danish areas. City centres look higher because visitors and nightlife guests
+              add offences but don't count as residents.
+            </Text>
           </View>
 
           <View style={styles.factsCard}>
-            <Fact icon="podium-outline" label="National rank" value={`${data.rank} of ${data.municipalities_ranked}`} />
+            <Fact
+              icon="podium-outline"
+              label="Rank in Denmark (1 = highest rate)"
+              value={`${data.rank} of ${data.municipalities_ranked}`}
+            />
             <Fact icon="people-outline" label="Population" value={data.population.toLocaleString()} />
             <Fact icon="alert-circle-outline" label="Community reports, 30 days" value={String(data.recent_reports_30d)} />
             <Fact icon="newspaper-outline" label="Crime news, 90 days" value={String(data.recent_news_90d)} />
@@ -223,10 +231,14 @@ function CityView() {
               <Text style={[styles.compareTitle, styles.countryTitle]}>{data.country.name} in the world</Text>
               <Fact
                 icon="globe-outline"
-                label="Crime Index rank (1 = most crime)"
-                value={`${data.country.rank} of ${data.country.countries_ranked}`}
+                label="Safer than"
+                value={`${Math.round(((data.country.rank - 1) / Math.max(data.country.countries_ranked - 1, 1)) * 100)}% of countries`}
               />
-              <Fact icon="shield-outline" label="Safety Index" value={`${data.country.safety_index.toFixed(0)} / 100`} />
+              <Fact
+                icon="shield-outline"
+                label="Safety Index (higher = safer)"
+                value={`${data.country.safety_index.toFixed(0)} / 100`}
+              />
               <Fact
                 icon="pulse-outline"
                 label={`Homicides per 100,000 (${data.country.homicides_year})`}
@@ -306,6 +318,7 @@ const makeStyles = ({ colors, card, inputStyle, typography, elevation }) =>
     segmentTextActive: { color: colors.primary, fontWeight: "700" },
     stack: { flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden", marginVertical: 8 },
     stackPart: { height: 10 },
+    explain: { color: colors.textSubtle, fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
     noSurvey: { color: colors.textSubtle, fontSize: 12, marginBottom: spacing.md, fontStyle: "italic" },
     countryTitle: { marginTop: spacing.md, marginBottom: 0 },
 
@@ -335,7 +348,7 @@ const makeStyles = ({ colors, card, inputStyle, typography, elevation }) =>
     scoreCard: { flex: 1, borderRadius: radius.lg, padding: spacing.lg },
     scoreValue: { fontSize: 32, fontWeight: "800", marginTop: spacing.sm },
     scoreSuffix: { fontSize: 14, fontWeight: "600" },
-    scoreLabel: { color: colors.textMuted, fontWeight: "600", marginTop: 2 },
+    scoreLabel: { color: colors.textMuted, fontWeight: "600", fontSize: 12, lineHeight: 16, marginTop: 4 },
 
     compareCard: { ...card, padding: spacing.lg, marginBottom: spacing.md },
     compareTitle: { ...typography.sectionLabel, marginBottom: spacing.sm },

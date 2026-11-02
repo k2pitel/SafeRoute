@@ -92,8 +92,9 @@ export function CountryRanking() {
   const header = (
     <View>
       <Text style={styles.intro}>
-        Crime Index 0–100: how a country ranks on homicides per 100,000 and, in Europe, on the share of people who
-        report crime or vandalism nearby. Safety Index = 100 − Crime Index.
+        Crime Index 0–100: the share of countries with fewer homicides per 100,000, the one crime measure recorded the
+        same way everywhere. Safety Index = 100 − Crime Index. "Crime nearby" is a European survey, shown for context but
+        not scored. Sorted from most to least crime, so a high rank number means a safe country.
       </Text>
       <SearchBox value={query} onChange={setQuery} placeholder="Find a country" />
       <FlatList
@@ -115,7 +116,7 @@ export function CountryRanking() {
       <View style={styles.tableHead}>
         <Text style={[styles.th, styles.colRank]}>#</Text>
         <Text style={[styles.th, styles.colName]}>Country</Text>
-        <Text style={[styles.th, styles.colNum]}>Crime</Text>
+        <Text style={[styles.th, styles.colNum]}>Crime ↓</Text>
         <Text style={[styles.th, styles.colNum]}>Safety</Text>
       </View>
     </View>

@@ -65,7 +65,7 @@ def _summary(muni: str, rate: float, national: float, rank: int, total: int, lab
     else:
         compare = "close to the national average"
     parts = [
-        f"{muni} recorded {rate:.0f} violent crimes per 100,000 residents"
+        f"{muni} had {rate:.0f} reported violent offences (all types) per 100,000 residents"
         + (f" ({period})" if period else "")
         + f", {compare} ({national:.0f}). It ranks {rank} of {total} municipalities, where 1 is the highest rate."
     ]
@@ -79,7 +79,11 @@ def _summary(muni: str, rate: float, national: float, rank: int, total: int, lab
         f"In the last 30 days there were {reports} community report(s), and {news} crime news article(s) "
         "mentioned the area in the last 90 days."
     )
-    parts.append("Per-resident rates make city centres with many visitors look worse than they feel.")
+    parts.append(
+        "This counts every reported violent offence, including minor assaults and threats, so it only compares "
+        "Danish areas with each other; internationally Denmark is among the safest countries. Per-resident rates "
+        "also make city centres with many visitors look worse than they feel."
+    )
     return " ".join(parts)
 
 

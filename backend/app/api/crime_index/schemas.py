@@ -37,11 +37,11 @@ class CountrySafetyOut(BaseModel):
     iso2: str
     name: str
     region: str
-    crime_index: float  # 0-100, mean percentile of the measures used
+    crime_index: float  # 0-100, percentile on homicides per 100,000
     safety_index: float  # 100 - crime_index
     homicides_per_100k: float
     homicides_year: str
-    crime_in_area_percent: float | None  # % reporting crime/violence/vandalism nearby (Eurostat)
+    crime_in_area_percent: float | None  # % reporting crime/violence/vandalism nearby (Eurostat); shown, not scored
     crime_in_area_year: str | None
     measures: list[str]
 

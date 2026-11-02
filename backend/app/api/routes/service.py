@@ -91,7 +91,7 @@ def _explanation(passed, contributions: list[dict], *, estimated: bool) -> str:
         parts.append("Route engine unavailable: estimated from straight-line distance.")
     if passed:
         areas = "; ".join(
-            f"{z.name.title()}: {z.crime_rate_per_100k:g} violent crimes per 100,000/yr "
+            f"{z.name.title()}: {z.crime_rate_per_100k:g} reported violent offences per 100,000/yr "
             f"({_ZONE_LABEL_TEXT[zones.label_for_score(z.safety_score)]})"
             for z in passed
         )

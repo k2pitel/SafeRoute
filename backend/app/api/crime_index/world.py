@@ -2,17 +2,19 @@
 
 A Numbeo-style Crime Index / Safety Index without Numbeo's paid data:
 
-    crime_index  = mean of the country's percentile (0–100, higher = more
-                   crime) on each available measure:
-                     - homicides per 100,000 (World Bank / UNODC, all countries)
-                     - % reporting crime, violence or vandalism in their area
-                       (Eurostat EU-SILC, EU and neighbours)
+    crime_index  = the country's percentile (0–100, higher = more crime) on
+                   homicides per 100,000 (World Bank / UNODC)
     safety_index = 100 − crime_index
 
-Percentiles keep the two measures on one scale without inventing weights;
-a country with only the homicide measure is ranked on that alone, and the
-response says which measures were used. Cities use the Eurostat perception
-survey directly: the share who agree they feel safe walking alone at night.
+Homicides only, on purpose: it is the one crime measure recorded the same
+way in every country. The Eurostat survey "% reporting crime, violence or
+vandalism in their area" is returned alongside but kept out of the index:
+it measures what people notice and complain about, which varies with
+expectations (the Netherlands reports 16.7 %, Poland 2.8 %), and mixing a
+36-country percentile with a 196-country one let the survey decide the
+order inside Europe (it ranked Romania below Denmark despite ~30 % more
+homicides). Cities use the Eurostat perception survey directly: the share
+who agree they feel safe walking alone at night.
 """
 import logging
 from datetime import UTC, datetime
@@ -72,14 +74,10 @@ def build(homicides: dict[str, dict], crime_in_area: dict[str, dict], cities: di
             countries[iso2]["crime_in_area_year"] = c["year"]
 
     homicide_pct = _percentiles({k: c["homicides_per_100k"] for k, c in countries.items()})
-    area_pct = _percentiles(
-        {k: c["crime_in_area_percent"] for k, c in countries.items() if c["crime_in_area_percent"] is not None}
-    )
     for iso2, c in countries.items():
-        parts = [homicide_pct[iso2]] + ([area_pct[iso2]] if iso2 in area_pct else [])
-        c["crime_index"] = round(sum(parts) / len(parts), 1)
+        c["crime_index"] = homicide_pct[iso2]
         c["safety_index"] = round(100 - c["crime_index"], 1)
-        c["measures"] = ["homicides"] + (["crime_in_area"] if iso2 in area_pct else [])
+        c["measures"] = ["homicides"]  # crime_in_area is shown, not scored (see module docstring)
 
     city_records: dict[str, dict] = {}
     for code, city in cities.items():

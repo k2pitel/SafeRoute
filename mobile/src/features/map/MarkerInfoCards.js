@@ -33,7 +33,7 @@ export function ZoneInfoCard({ zone, onClose }) {
   return (
     <InfoCard title={zone.name} actions={[close(onClose)]}>
       <InfoText>
-        {zone.rate.toFixed(0)} violent crimes per 100,000 residents per year
+        {zone.rate.toFixed(0)} reported violent offences per 100,000 residents per year
         {ratio ? ` (${ratio.toFixed(1)}× the national ${zone.nationalRate.toFixed(0)})` : ""}.
       </InfoText>
       <InfoText>Tryghedsscore {zone.score.toFixed(1)} / 10 · municipality level</InfoText>
